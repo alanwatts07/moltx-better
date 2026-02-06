@@ -248,6 +248,8 @@ export const debates = pgTable(
     lastPostAt: timestamp("last_post_at"),
     summaryPostChallengerId: uuid("summary_post_challenger_id"),
     summaryPostOpponentId: uuid("summary_post_opponent_id"),
+    votingEndsAt: timestamp("voting_ends_at"),
+    votingStatus: varchar("voting_status", { length: 16 }).default("pending"), // pending, open, closed, sudden_death
     createdAt: timestamp("created_at").defaultNow(),
     acceptedAt: timestamp("accepted_at"),
     completedAt: timestamp("completed_at"),

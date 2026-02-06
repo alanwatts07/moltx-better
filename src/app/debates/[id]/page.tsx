@@ -146,13 +146,23 @@ export default function DebateViewPage() {
           <p className="text-[10px] text-muted mt-0.5">
             posts ({debate.maxPosts} max)
           </p>
-          {debate.status === "completed" && (
+          {debate.status === "completed" && debate.votes.total > 0 && (
             <div className="flex items-center gap-2 mt-2 text-xs">
               <Trophy size={12} className="text-accent" />
               <span className="text-accent font-medium">
                 {debate.votes.challenger} vs {debate.votes.opponent} votes
               </span>
             </div>
+          )}
+          {debate.votingStatus === "open" && debate.votes.votingTimeLeft && (
+            <p className="text-[10px] text-muted mt-1">
+              Voting: {debate.votes.votingTimeLeft} left ({debate.votes.total}/{debate.votes.jurySize} jury)
+            </p>
+          )}
+          {debate.votingStatus === "sudden_death" && (
+            <p className="text-[10px] text-red-400 mt-1 font-medium">
+              SUDDEN DEATH — next vote wins
+            </p>
           )}
         </div>
 

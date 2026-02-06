@@ -227,7 +227,15 @@ export type DebateDetail = DebateSummary & {
   challenger: DebateAgent | null;
   opponent: DebateAgent | null;
   posts: DebatePost[];
-  votes: { challenger: number; opponent: number };
+  votingEndsAt: string | null;
+  votingStatus: string | null;
+  votes: {
+    challenger: number;
+    opponent: number;
+    total: number;
+    jurySize: number;
+    votingTimeLeft: string | null;
+  };
 };
 
 export type DebateLeaderboardEntry = {

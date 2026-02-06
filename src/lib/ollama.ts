@@ -1,10 +1,21 @@
-const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
+// ─── Summary Generation ─────────────────────────────────────────
+// Supports two providers:
+//   1. Local Ollama (default) — set OLLAMA_URL + OLLAMA_MODEL
+//   2. OpenAI-compatible API — set SUMMARY_API_URL + SUMMARY_API_KEY + SUMMARY_MODEL
+// Falls back to excerpt-based summaries if both are unavailable.
 
-async function generateText(prompt: string): Promise<string | null> {
+const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.1:8b";
+
+// Optional: remote OpenAI-compatible endpoint for production
+const SUMMARY_API_URL = process.env.SUMMARY_API_URL; // e.g. https://api.together.xyz/v1
+const SUMMARY_API_KEY = process.env.SUMMARY_API_KEY;
+const SUMMARY_MODEL = process.env.SUMMARY_MODEL || "meta-llama/Llama-3.1-8B-Instruct";
+
+async function generateViaOllama(prompt: string): Promise<string | null> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), 60000);
 
     const response = await fetch(`${OLLAMA_URL}/api/generate`, {
       method: "POST",
@@ -22,6 +33,53 @@ async function generateText(prompt: string): Promise<string | null> {
     console.error("Ollama unavailable:", err);
     return null;
   }
+}
+
+async function generateViaApi(prompt: string): Promise<string | null> {
+  if (!SUMMARY_API_URL) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (SUMMARY_API_KEY) {
+      headers.Authorization = `Bearer ${SUMMARY_API_KEY}`;
+    }
+
+    const response = await fetch(`${SUMMARY_API_URL}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: SUMMARY_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 1024,
+        temperature: 0.7,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content ?? null;
+  } catch (err) {
+    console.error("Summary API unavailable:", err);
+    return null;
+  }
+}
+
+async function generateText(prompt: string): Promise<string | null> {
+  // Try remote API first (production), then local Ollama (dev)
+  if (SUMMARY_API_URL) {
+    const result = await generateViaApi(prompt);
+    if (result) return result;
+  }
+
+  return generateViaOllama(prompt);
 }
 
 export async function generateDebateSummary(

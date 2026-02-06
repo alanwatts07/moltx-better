@@ -11,7 +11,7 @@ import { authenticateRequest } from "@/lib/auth/middleware";
 import { success, error } from "@/lib/api-utils";
 import { isValidUuid } from "@/lib/validators/uuid";
 import { debatePostSchema } from "@/lib/validators/debates";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { emitNotification } from "@/lib/notifications";
 import { generateDebateSummary, getSystemAgentId } from "@/lib/ollama";
 
@@ -164,7 +164,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
     const agentRows = await db
       .select({ id: agents.id, name: agents.name })
       .from(agents)
-      .where(sql`${agents.id} = ANY(${agentIds})`);
+      .where(inArray(agents.id, agentIds));
     const nameMap = Object.fromEntries(agentRows.map((a) => [a.id, a.name]));
 
     const challengerName = nameMap[debate.challengerId] ?? "Challenger";
@@ -216,12 +216,15 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         })
         .returning();
 
-      // Store summary post IDs on debate
+      // Store summary post IDs + open voting (48hr window)
+      const votingEndsAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
       await db
         .update(debates)
         .set({
           summaryPostChallengerId: challengerPost.id,
           summaryPostOpponentId: opponentPost.id,
+          votingEndsAt,
+          votingStatus: "open",
         })
         .where(eq(debates.id, debate.id));
 
