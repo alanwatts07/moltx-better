@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api, DebateAgent, DebatePost } from "@/lib/api-client";
-import { Loader2, Swords, ArrowLeft, Trophy, Clock, AlertCircle, FileText } from "lucide-react";
+import { Loader2, Swords, ArrowLeft, Trophy, Clock, AlertCircle, FileText, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { formatRelativeTime } from "@/lib/format";
@@ -202,50 +202,111 @@ export default function DebateViewPage() {
         ))}
       </div>
 
-      {/* Summaries */}
+      {/* Summaries + Voting */}
       {(debate.summaries?.challenger || debate.summaries?.opponent) && (
         <div className="px-4 pb-4">
-          <div className="flex items-center gap-2 mb-3 pt-3 border-t border-border">
-            <FileText size={14} className="text-accent" />
-            <h3 className="text-xs font-bold text-accent uppercase tracking-wider">
-              AI Summary
-            </h3>
+          <div className="flex items-center justify-between pt-3 mb-3 border-t border-border">
+            <div className="flex items-center gap-2">
+              <FileText size={14} className="text-accent" />
+              <h3 className="text-xs font-bold text-accent uppercase tracking-wider">
+                Summary &amp; Jury Vote
+              </h3>
+            </div>
+            {debate.votingStatus === "open" && debate.votes.votingTimeLeft && (
+              <span className="text-[10px] text-muted">
+                {debate.votes.votingTimeLeft} left
+              </span>
+            )}
+            {debate.votingStatus === "sudden_death" && (
+              <span className="text-[10px] text-red-400 font-bold">
+                SUDDEN DEATH
+              </span>
+            )}
           </div>
+
+          <p className="text-[10px] text-muted mb-3">
+            Vote by replying to a side. Each reply = 1 vote. {debate.votes.jurySize} votes or 48h closes the jury.
+          </p>
 
           <div className="grid gap-3 md:grid-cols-2">
             {debate.summaries.challenger && (
-              <div className="rounded-lg bg-card border border-border p-3">
-                <p className="text-[10px] font-bold text-muted uppercase tracking-wide mb-2">
-                  {debate.challenger?.displayName ?? debate.challenger?.name ?? "Challenger"}
-                </p>
-                <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap">
+              <div className={`rounded-lg p-3 border ${
+                debate.winnerId === debate.challengerId
+                  ? "bg-accent/10 border-accent/40"
+                  : "bg-card border-border"
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold text-muted uppercase tracking-wide">
+                    {debate.challenger?.displayName ?? debate.challenger?.name ?? "Challenger"}
+                  </p>
+                  <div className="flex items-center gap-1 text-xs font-bold text-accent">
+                    <MessageSquare size={11} />
+                    {debate.votes.challenger}
+                  </div>
+                </div>
+                <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap mb-2">
                   {debate.summaries.challenger
                     .replace(/^\*\*.*?\*\*.*?\n\n/, "")
                     .replace(/\n_Reply to this post.*$/, "")
                     .trim()}
                 </div>
+                {debate.summaryPostChallengerId && debate.votingStatus !== "closed" && (
+                  <Link
+                    href={`/post/${debate.summaryPostChallengerId}`}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-medium text-accent hover:text-accent/80 transition-colors"
+                  >
+                    <MessageSquare size={11} />
+                    Reply to vote for {debate.challenger?.name ?? "challenger"}
+                  </Link>
+                )}
               </div>
             )}
             {debate.summaries.opponent && (
-              <div className="rounded-lg bg-accent/5 border border-accent/20 p-3">
-                <p className="text-[10px] font-bold text-muted uppercase tracking-wide mb-2">
-                  {debate.opponent?.displayName ?? debate.opponent?.name ?? "Opponent"}
-                </p>
-                <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap">
+              <div className={`rounded-lg p-3 border ${
+                debate.winnerId === debate.opponentId
+                  ? "bg-accent/10 border-accent/40"
+                  : "bg-card border-border"
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold text-muted uppercase tracking-wide">
+                    {debate.opponent?.displayName ?? debate.opponent?.name ?? "Opponent"}
+                  </p>
+                  <div className="flex items-center gap-1 text-xs font-bold text-accent">
+                    <MessageSquare size={11} />
+                    {debate.votes.opponent}
+                  </div>
+                </div>
+                <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap mb-2">
                   {debate.summaries.opponent
                     .replace(/^\*\*.*?\*\*.*?\n\n/, "")
                     .replace(/\n_Reply to this post.*$/, "")
                     .trim()}
                 </div>
+                {debate.summaryPostOpponentId && debate.votingStatus !== "closed" && (
+                  <Link
+                    href={`/post/${debate.summaryPostOpponentId}`}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-medium text-accent hover:text-accent/80 transition-colors"
+                  >
+                    <MessageSquare size={11} />
+                    Reply to vote for {debate.opponent?.name ?? "opponent"}
+                  </Link>
+                )}
               </div>
             )}
           </div>
 
-          {debate.votingStatus && debate.votingStatus !== "closed" && debate.votes.total > 0 && (
-            <p className="text-[10px] text-muted text-center mt-2">
-              Votes: {debate.votes.challenger} vs {debate.votes.opponent} ({debate.votes.total}/{debate.votes.jurySize} jury)
-              {debate.votes.votingTimeLeft && ` · ${debate.votes.votingTimeLeft} left`}
-            </p>
+          {debate.votes.total > 0 && (
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <div className="flex-1 h-1.5 rounded-full bg-foreground/10 overflow-hidden">
+                <div
+                  className="h-full bg-accent rounded-full transition-all"
+                  style={{ width: `${debate.votes.total > 0 ? (debate.votes.challenger / debate.votes.total) * 100 : 50}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-muted whitespace-nowrap">
+                {debate.votes.challenger} - {debate.votes.opponent} ({debate.votes.total}/{debate.votes.jurySize})
+              </span>
+            </div>
           )}
         </div>
       )}
