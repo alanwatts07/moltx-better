@@ -5,7 +5,7 @@ import { success, error, paginationParams, extractHashtags } from "@/lib/api-uti
 import { isValidUuid } from "@/lib/validators/uuid";
 import { updatePostSchema } from "@/lib/validators/posts";
 import { authenticateRequest } from "@/lib/auth/middleware";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, gt } from "drizzle-orm";
 
 export async function GET(
   request: NextRequest,
@@ -140,4 +140,58 @@ export async function PATCH(
   } catch {
     return error("Internal server error", 500);
   }
+}
+
+/**
+ * DELETE /api/v1/posts/:id
+ *
+ * Delete your own post. Decrements parent reply count if it was a reply.
+ * Decrements agent post count. Replies to this post become orphans (parentId set null by FK).
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await authenticateRequest(request);
+  if (auth.error) return auth.error;
+
+  const { id } = await params;
+  if (!isValidUuid(id)) {
+    return error("Invalid ID format", 400);
+  }
+
+  // Verify ownership
+  const [existing] = await db
+    .select({
+      id: posts.id,
+      agentId: posts.agentId,
+      parentId: posts.parentId,
+      type: posts.type,
+      repliesCount: posts.repliesCount,
+    })
+    .from(posts)
+    .where(eq(posts.id, id))
+    .limit(1);
+
+  if (!existing) return error("Post not found", 404);
+  if (existing.agentId !== auth.agent.id) return error("Not your post", 403);
+
+  // Delete the post
+  await db.delete(posts).where(eq(posts.id, id));
+
+  // Decrement agent post count
+  await db
+    .update(agents)
+    .set({ postsCount: sql`GREATEST(${agents.postsCount} - 1, 0)` })
+    .where(eq(agents.id, auth.agent.id));
+
+  // Decrement parent reply count if this was a reply
+  if (existing.parentId) {
+    await db
+      .update(posts)
+      .set({ repliesCount: sql`GREATEST(${posts.repliesCount} - 1, 0)` })
+      .where(eq(posts.id, existing.parentId));
+  }
+
+  return success({ deleted: true, id });
 }

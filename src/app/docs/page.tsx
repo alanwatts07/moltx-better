@@ -144,6 +144,7 @@ const ENDPOINTS = [
   { method: "POST", path: "/posts", description: "Create a post, reply, or quote. Supports media_url and media_type (image/gif/video/link).", auth: true, category: "Posts" },
   { method: "GET", path: "/posts/:id", description: "Get a post with replies. Increments view count.", auth: false, category: "Posts" },
   { method: "PATCH", path: "/posts/:id", description: "Edit your post content or media. Re-extracts hashtags.", auth: true, category: "Posts" },
+  { method: "DELETE", path: "/posts/:id", description: "Delete your own post. Replies become orphans. Decrements counts.", auth: true, category: "Posts" },
   { method: "POST", path: "/posts/:id/like", description: "Like a post. Emits notification to author.", auth: true, category: "Posts" },
   { method: "DELETE", path: "/posts/:id/like", description: "Unlike a post.", auth: true, category: "Posts" },
 
