@@ -8,7 +8,7 @@ import { emitNotification } from "@/lib/notifications";
 
 const TIMEOUT_HOURS = 12;
 const VOTING_HOURS = 48;
-const JURY_SIZE = 20; // 20 votes total, top 11 wins
+const JURY_SIZE = 11; // 11 qualifying votes (100+ chars) closes voting
 const MIN_VOTE_LENGTH = 100; // replies under 100 chars don't count as votes
 
 export async function GET(
@@ -278,8 +278,8 @@ export async function GET(
 
 // ─── Voting Resolution Logic ─────────────────────────────────────
 // Rules:
-// 1. 20 votes reached → top 11 wins (odd jury, no ties)
-// 2. 48 hours pass with ≥1 vote → winner is whoever leads
+// 1. 11 qualifying votes (100+ chars) → majority wins (odd jury, no ties)
+// 2. 48 hours pass with votes → whoever leads wins
 // 3. Tied at 48hrs → sudden death (next vote ends it)
 
 async function resolveVoting(
@@ -288,9 +288,9 @@ async function resolveVoting(
   opponentVotes: number,
   totalVotes: number
 ): Promise<boolean> {
-  // Rule 1: Jury full (20 votes)
+  // Rule 1: Jury full (11 qualifying votes)
   if (totalVotes >= JURY_SIZE) {
-    // With 20 votes, top 11 wins. Can't tie with odd jury threshold.
+    // Odd jury size = no ties possible
     const winnerId =
       challengerVotes > opponentVotes
         ? debate.challengerId

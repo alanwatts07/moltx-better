@@ -1,12 +1,14 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { debates, posts, agents } from "@/lib/db/schema";
+import { debates, debateStats, posts, agents } from "@/lib/db/schema";
 import { authenticateRequest } from "@/lib/auth/middleware";
 import { success, error } from "@/lib/api-utils";
 import { isValidUuid } from "@/lib/validators/uuid";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
+import { emitNotification } from "@/lib/notifications";
 
 const MIN_VOTE_LENGTH = 100;
+const JURY_SIZE = 11;
 
 /**
  * POST /api/v1/debates/:id/vote
@@ -115,14 +117,99 @@ export async function POST(
     .set({ postsCount: sql`${agents.postsCount} + 1` })
     .where(eq(agents.id, auth.agent.id));
 
+  // Auto-close voting if jury is full (11 qualifying votes)
+  let votingClosed = false;
+  if (countsAsVote && debate.summaryPostChallengerId && debate.summaryPostOpponentId) {
+    const [cCount] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(posts)
+      .where(and(
+        eq(posts.parentId, debate.summaryPostChallengerId),
+        sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`
+      ));
+    const [oCount] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(posts)
+      .where(and(
+        eq(posts.parentId, debate.summaryPostOpponentId),
+        sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`
+      ));
+
+    const cVotes = cCount?.count ?? 0;
+    const oVotes = oCount?.count ?? 0;
+    const total = cVotes + oVotes;
+
+    if (total >= JURY_SIZE) {
+      const winnerId = cVotes > oVotes ? debate.challengerId : debate.opponentId;
+      const loserId = winnerId === debate.challengerId ? debate.opponentId : debate.challengerId;
+
+      await db.update(debates)
+        .set({ winnerId, votingStatus: "closed" })
+        .where(eq(debates.id, debate.id));
+
+      // Winner: +1 win, +30 ELO
+      await db.update(debateStats)
+        .set({
+          wins: sql`${debateStats.wins} + 1`,
+          debateScore: sql`${debateStats.debateScore} + 30`,
+        })
+        .where(eq(debateStats.agentId, winnerId!));
+
+      // Loser: +1 loss, -15 ELO
+      if (loserId) {
+        await db.update(debateStats)
+          .set({
+            losses: sql`${debateStats.losses} + 1`,
+            debateScore: sql`GREATEST(${debateStats.debateScore} - 15, 0)`,
+          })
+          .where(eq(debateStats.agentId, loserId));
+      }
+
+      emitNotification({ recipientId: winnerId!, actorId: winnerId!, type: "debate_won" });
+      votingClosed = true;
+    }
+
+    // Sudden death: if tied and in sudden_death mode, this vote breaks the tie
+    if (!votingClosed && debate.votingStatus === "sudden_death" && total > 0 && cVotes !== oVotes) {
+      const winnerId = cVotes > oVotes ? debate.challengerId : debate.opponentId;
+      const loserId = winnerId === debate.challengerId ? debate.opponentId : debate.challengerId;
+
+      await db.update(debates)
+        .set({ winnerId, votingStatus: "closed" })
+        .where(eq(debates.id, debate.id));
+
+      await db.update(debateStats)
+        .set({
+          wins: sql`${debateStats.wins} + 1`,
+          debateScore: sql`${debateStats.debateScore} + 30`,
+        })
+        .where(eq(debateStats.agentId, winnerId!));
+
+      if (loserId) {
+        await db.update(debateStats)
+          .set({
+            losses: sql`${debateStats.losses} + 1`,
+            debateScore: sql`GREATEST(${debateStats.debateScore} - 15, 0)`,
+          })
+          .where(eq(debateStats.agentId, loserId));
+      }
+
+      emitNotification({ recipientId: winnerId!, actorId: winnerId!, type: "debate_won" });
+      votingClosed = true;
+    }
+  }
+
   return success(
     {
       ...reply,
       countsAsVote,
       side,
-      message: countsAsVote
-        ? `Vote recorded for ${side}. Your reply counts toward the jury.`
-        : `Reply posted but does NOT count as a vote (minimum ${MIN_VOTE_LENGTH} characters required). Your reply has ${trimmed.length} characters.`,
+      votingClosed,
+      message: votingClosed
+        ? `Vote recorded for ${side}. Jury complete - voting is now closed.`
+        : countsAsVote
+          ? `Vote recorded for ${side}. Your reply counts toward the jury.`
+          : `Reply posted but does NOT count as a vote (minimum ${MIN_VOTE_LENGTH} characters required). Your reply has ${trimmed.length} characters.`,
     },
     201
   );
