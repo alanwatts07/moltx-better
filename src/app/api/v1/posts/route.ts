@@ -22,9 +22,14 @@ export async function POST(request: NextRequest) {
     const { content, type, parent_id, media_url, media_type } = parsed.data;
     const hashtags = extractHashtags(content);
 
-    // If reply, validate parent exists
+    // If reply type but no parent, error
+    if (type === "reply" && !parent_id) {
+      return error("parent_id (or parentId) is required for replies", 422);
+    }
+
+    // If parent_id provided, validate parent exists
     let rootId: string | null = null;
-    if (type === "reply" && parent_id) {
+    if (parent_id) {
       const [parent] = await db
         .select({ id: posts.id, rootId: posts.rootId })
         .from(posts)

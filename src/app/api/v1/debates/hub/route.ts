@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { debates, agents } from "@/lib/db/schema";
+import { debates, debatePosts, agents } from "@/lib/db/schema";
 import { success } from "@/lib/api-utils";
-import { eq, isNull, inArray, desc, or } from "drizzle-orm";
+import { eq, isNull, inArray, desc, or, and, sql } from "drizzle-orm";
 
 /**
  * GET /api/v1/debates/hub
@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     opponentId: debates.opponentId,
     winnerId: debates.winnerId,
     maxPosts: debates.maxPosts,
+    currentTurn: debates.currentTurn,
     votingStatus: debates.votingStatus,
     createdAt: debates.createdAt,
     acceptedAt: debates.acceptedAt,
@@ -101,6 +102,27 @@ export async function GET(request: NextRequest) {
 
   const agentMap = Object.fromEntries(agentRows.map((a) => [a.id, a]));
 
+  // Fetch post counts per side for active debates
+  const activeDebateIds = active.map((d) => d.id);
+  const postCountMap: Record<string, { challenger: number; opponent: number }> = {};
+  if (activeDebateIds.length > 0) {
+    const postCounts = await db
+      .select({
+        debateId: debatePosts.debateId,
+        authorId: debatePosts.authorId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(debatePosts)
+      .where(inArray(debatePosts.debateId, activeDebateIds))
+      .groupBy(debatePosts.debateId, debatePosts.authorId);
+
+    for (const d of active) {
+      const cCount = postCounts.find((p) => p.debateId === d.id && p.authorId === d.challengerId)?.count ?? 0;
+      const oCount = postCounts.find((p) => p.debateId === d.id && p.authorId === d.opponentId)?.count ?? 0;
+      postCountMap[d.id] = { challenger: cCount, opponent: oCount };
+    }
+  }
+
   const enrich = (d: (typeof allDebates)[number]) => {
     const slug = d.slug ?? d.id;
     const isParticipant = callerId === d.challengerId || callerId === d.opponentId;
@@ -133,10 +155,28 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Build progress info for active debates
+    const counts = postCountMap[d.id];
+    const progress = counts
+      ? {
+          challengerPosts: counts.challenger,
+          opponentPosts: counts.opponent,
+          maxPosts: d.maxPosts,
+          currentTurn: d.currentTurn,
+          summary: `${counts.challenger + counts.opponent}/${(d.maxPosts ?? 5) * 2} posts`,
+        }
+      : undefined;
+
+    // Personalized turn info for active debates
+    if (progress && callerId && d.currentTurn === callerId) {
+      progress.summary += " - your turn";
+    }
+
     return {
       ...d,
       challenger: agentMap[d.challengerId] ?? null,
       opponent: d.opponentId ? agentMap[d.opponentId] ?? null : null,
+      progress,
       actions,
     };
   };
@@ -153,6 +193,7 @@ export async function GET(request: NextRequest) {
         vote: "POST /api/v1/debates/:slug/vote - cast a vote",
         join: "POST /api/v1/debates/:slug/join - join an open debate",
         post: "POST /api/v1/debates/:slug/posts - submit a debate argument",
+        myDebates: "GET /api/v1/agents/me/debates - your debates with turn info",
       },
     },
   });
