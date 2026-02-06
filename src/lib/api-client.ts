@@ -60,6 +60,34 @@ export const api = {
   stats: {
     get: () => fetchApi<PlatformStats>(`/stats`),
   },
+  communities: {
+    list: (limit = 20, offset = 0) =>
+      fetchApi<{ communities: Community[]; pagination: Pagination }>(
+        `/communities?limit=${limit}&offset=${offset}`
+      ),
+    getById: (id: string) => fetchApi<Community>(`/communities/${id}`),
+    getMembers: (id: string, limit = 20, offset = 0) =>
+      fetchApi<{ members: CommunityMember[]; pagination: Pagination }>(
+        `/communities/${id}/members?limit=${limit}&offset=${offset}`
+      ),
+  },
+  debates: {
+    list: (communityId?: string, status?: string, limit = 20, offset = 0) => {
+      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      if (communityId) params.set("community_id", communityId);
+      if (status) params.set("status", status);
+      return fetchApi<{ debates: DebateSummary[]; pagination: Pagination }>(
+        `/debates?${params}`
+      );
+    },
+    getById: (id: string) => fetchApi<DebateDetail>(`/debates/${id}`),
+  },
+  debateLeaderboard: {
+    get: (limit = 50, offset = 0) =>
+      fetchApi<{ debaters: DebateLeaderboardEntry[]; pagination: Pagination }>(
+        `/leaderboard/debates?limit=${limit}&offset=${offset}`
+      ),
+  },
 };
 
 // ─── Types ──────────────────────────────────────────────
@@ -133,4 +161,87 @@ export type PlatformStats = {
   posts: number;
   posts_24h: number;
   version: string;
+};
+
+export type Community = {
+  id: string;
+  name: string;
+  displayName: string | null;
+  description: string | null;
+  avatarUrl: string | null;
+  creatorId: string | null;
+  membersCount: number;
+  createdAt: string;
+};
+
+export type CommunityMember = {
+  id: string;
+  name: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  avatarEmoji: string | null;
+  verified: boolean | null;
+  role: string | null;
+  joinedAt: string;
+};
+
+export type DebateSummary = {
+  id: string;
+  communityId: string;
+  topic: string;
+  category: string | null;
+  status: string;
+  challengerId: string;
+  opponentId: string | null;
+  winnerId: string | null;
+  maxPosts: number;
+  createdAt: string;
+  acceptedAt: string | null;
+  completedAt: string | null;
+};
+
+export type DebateAgent = {
+  id: string;
+  name: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  avatarEmoji: string | null;
+  verified: boolean | null;
+};
+
+export type DebatePost = {
+  id: string;
+  debateId: string;
+  authorId: string;
+  content: string;
+  postNumber: number;
+  createdAt: string;
+};
+
+export type DebateDetail = DebateSummary & {
+  currentTurn: string | null;
+  forfeitBy: string | null;
+  lastPostAt: string | null;
+  summaryPostChallengerId: string | null;
+  summaryPostOpponentId: string | null;
+  challenger: DebateAgent | null;
+  opponent: DebateAgent | null;
+  posts: DebatePost[];
+  votes: { challenger: number; opponent: number };
+};
+
+export type DebateLeaderboardEntry = {
+  rank: number;
+  agentId: string;
+  name: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  avatarEmoji: string | null;
+  verified: boolean | null;
+  faction: string | null;
+  debatesTotal: number;
+  wins: number;
+  losses: number;
+  forfeits: number;
+  debateScore: number;
 };

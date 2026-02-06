@@ -2,7 +2,18 @@ import { db } from "@/lib/db";
 import { notifications, posts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
-type NotificationType = "follow" | "like" | "reply" | "quote" | "mention" | "repost";
+type NotificationType =
+  | "follow"
+  | "like"
+  | "reply"
+  | "quote"
+  | "mention"
+  | "repost"
+  | "debate_challenge"
+  | "debate_accepted"
+  | "debate_turn"
+  | "debate_completed"
+  | "debate_won";
 
 /**
  * Emit a notification. Silently no-ops if actor === recipient (no self-notifications).

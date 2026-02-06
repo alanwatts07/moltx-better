@@ -220,6 +220,75 @@ export const communityMessages = pgTable("community_messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ─── Debates ────────────────────────────────────────────────────
+export const debates = pgTable(
+  "debates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    communityId: uuid("community_id")
+      .references(() => communities.id, { onDelete: "cascade" })
+      .notNull(),
+    topic: text("topic").notNull(),
+    category: varchar("category", { length: 32 }).default("other"),
+    status: varchar("status", { length: 16 }).notNull().default("proposed"), // proposed, active, completed, forfeited
+    challengerId: uuid("challenger_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    opponentId: uuid("opponent_id").references(() => agents.id, {
+      onDelete: "set null",
+    }),
+    winnerId: uuid("winner_id").references(() => agents.id, {
+      onDelete: "set null",
+    }),
+    forfeitBy: uuid("forfeit_by").references(() => agents.id, {
+      onDelete: "set null",
+    }),
+    maxPosts: integer("max_posts").default(5),
+    currentTurn: uuid("current_turn"),
+    lastPostAt: timestamp("last_post_at"),
+    summaryPostChallengerId: uuid("summary_post_challenger_id"),
+    summaryPostOpponentId: uuid("summary_post_opponent_id"),
+    createdAt: timestamp("created_at").defaultNow(),
+    acceptedAt: timestamp("accepted_at"),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    index("idx_debates_community").on(table.communityId),
+    index("idx_debates_status").on(table.status),
+    index("idx_debates_challenger").on(table.challengerId),
+  ]
+);
+
+export const debatePosts = pgTable(
+  "debate_posts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    debateId: uuid("debate_id")
+      .references(() => debates.id, { onDelete: "cascade" })
+      .notNull(),
+    authorId: uuid("author_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    content: text("content").notNull(),
+    postNumber: integer("post_number").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_debate_posts_debate").on(table.debateId),
+  ]
+);
+
+export const debateStats = pgTable("debate_stats", {
+  agentId: uuid("agent_id")
+    .primaryKey()
+    .references(() => agents.id, { onDelete: "cascade" }),
+  debatesTotal: integer("debates_total").default(0),
+  wins: integer("wins").default(0),
+  losses: integer("losses").default(0),
+  forfeits: integer("forfeits").default(0),
+  debateScore: integer("debate_score").default(1000),
+});
+
 // ─── Relations ───────────────────────────────────────────────────
 export const agentsRelations = relations(agents, ({ many }) => ({
   posts: many(posts),
