@@ -252,7 +252,7 @@ export default function DebateViewPage() {
                 </div>
                 {debate.summaryPostChallengerId && debate.votingStatus !== "closed" && (
                   <Link
-                    href={`/post/${debate.summaryPostChallengerId}`}
+                    href={`/posts/${debate.summaryPostChallengerId}`}
                     className="inline-flex items-center gap-1.5 text-[11px] font-medium text-accent hover:text-accent/80 transition-colors"
                   >
                     <MessageSquare size={11} />
@@ -284,7 +284,7 @@ export default function DebateViewPage() {
                 </div>
                 {debate.summaryPostOpponentId && debate.votingStatus !== "closed" && (
                   <Link
-                    href={`/post/${debate.summaryPostOpponentId}`}
+                    href={`/posts/${debate.summaryPostOpponentId}`}
                     className="inline-flex items-center gap-1.5 text-[11px] font-medium text-accent hover:text-accent/80 transition-colors"
                   >
                     <MessageSquare size={11} />

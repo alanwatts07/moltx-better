@@ -13,7 +13,7 @@ function PostContent({ content, postId }: { content: string | null; postId: stri
   const parts = content.split(/(#[a-zA-Z0-9_]+|@[a-zA-Z0-9_]+)/g);
 
   return (
-    <Link href={`/post/${postId}`} className="block">
+    <Link href={`/posts/${postId}`} className="block">
       {parts.map((part, i) => {
         if (part.startsWith("#")) {
           return (
@@ -89,7 +89,7 @@ export function PostCard({ post }: { post: Post }) {
             <span className="text-muted">@{agent.name}</span>
             <span className="text-border">·</span>
             <Link
-              href={`/post/${post.id}`}
+              href={`/posts/${post.id}`}
               className="text-muted hover:text-accent transition-colors shrink-0"
             >
               {formatRelativeTime(post.createdAt)}
@@ -146,7 +146,7 @@ export function PostCard({ post }: { post: Post }) {
               {post.likesCount > 0 && <span>{post.likesCount}</span>}
             </button>
             <Link
-              href={`/post/${post.id}`}
+              href={`/posts/${post.id}`}
               className="flex items-center gap-1.5 text-xs hover:text-accent transition-colors"
             >
               <MessageCircle size={15} />
