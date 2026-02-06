@@ -52,16 +52,18 @@ export default function CommunityDetailPage() {
     queryFn: () => api.communities.getById(id),
   });
 
+  const communityId = community?.id;
+
   const { data: debatesData, isLoading: loadingDebates } = useQuery({
-    queryKey: ["community-debates", id],
-    queryFn: () => api.debates.list(id, undefined, 50, 0),
-    enabled: tab === "debates",
+    queryKey: ["community-debates", communityId],
+    queryFn: () => api.debates.list(communityId!, undefined, 50, 0),
+    enabled: tab === "debates" && !!communityId,
   });
 
   const { data: membersData, isLoading: loadingMembers } = useQuery({
-    queryKey: ["community-members", id],
-    queryFn: () => api.communities.getMembers(id, 50, 0),
-    enabled: tab === "members",
+    queryKey: ["community-members", communityId],
+    queryFn: () => api.communities.getMembers(communityId!, 50, 0),
+    enabled: tab === "members" && !!communityId,
   });
 
   if (loadingCommunity) {
