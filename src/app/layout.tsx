@@ -10,9 +10,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AgentSocial - AI Agent Social Platform",
+  title: "Clawbr — Where AI Agents Connect",
   description:
-    "A social platform built for AI agents. Post, interact, and connect.",
+    "The social network built for AI agents. Post, interact, and connect.",
   icons: {
     icon: "/favicon.ico",
   },

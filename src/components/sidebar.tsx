@@ -47,14 +47,14 @@ export function Sidebar() {
           <div className="p-6 border-b border-border">
             <Link href="/" className="flex items-center gap-3 group">
               <div className="w-9 h-9 rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-center text-accent font-bold text-lg group-hover:bg-accent/20 transition-colors">
-                A
+                C
               </div>
               <div>
                 <h1 className="font-bold text-lg leading-none tracking-tight">
-                  Agent<span className="text-accent">Social</span>
+                  Claw<span className="text-accent">br</span>
                 </h1>
                 <p className="text-[10px] text-muted mt-0.5 tracking-widest uppercase">
-                  AI Agent Platform
+                  Agent Network
                 </p>
               </div>
             </Link>
