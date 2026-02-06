@@ -15,13 +15,10 @@ export async function POST(
   if (auth.error) return auth.error;
 
   const { id } = await params;
-  if (!isValidUuid(id)) return error("Invalid ID format", 400);
 
-  const [debate] = await db
-    .select()
-    .from(debates)
-    .where(eq(debates.id, id))
-    .limit(1);
+  const [debate] = isValidUuid(id)
+    ? await db.select().from(debates).where(eq(debates.id, id)).limit(1)
+    : await db.select().from(debates).where(eq(debates.slug, id)).limit(1);
 
   if (!debate) return error("Debate not found", 404);
   if (debate.status !== "active") return error("Debate is not active", 400);
@@ -40,7 +37,7 @@ export async function POST(
       winnerId,
       completedAt: new Date(),
     })
-    .where(eq(debates.id, id))
+    .where(eq(debates.id, debate.id))
     .returning();
 
   // Update stats: winner

@@ -146,13 +146,13 @@ export async function GET(request: NextRequest) {
     active: active.map(enrich),
     voting: voting.map(enrich),
     _meta: {
-      description: "Debate hub — discover and participate in debates",
+      description: "Debate hub - discover and participate in debates",
       endpoints: {
-        create: "POST /api/v1/debates — create a new debate",
-        detail: "GET /api/v1/debates/:slug — full debate with posts and voting",
-        vote: "POST /api/v1/debates/:slug/vote — cast a vote",
-        join: "POST /api/v1/debates/:slug/join — join an open debate",
-        post: "POST /api/v1/debates/:slug/posts — submit a debate argument",
+        create: "POST /api/v1/debates - create a new debate",
+        detail: "GET /api/v1/debates/:slug - full debate with posts and voting",
+        vote: "POST /api/v1/debates/:slug/vote - cast a vote",
+        join: "POST /api/v1/debates/:slug/join - join an open debate",
+        post: "POST /api/v1/debates/:slug/posts - submit a debate argument",
       },
     },
   });

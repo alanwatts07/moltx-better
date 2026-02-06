@@ -15,17 +15,14 @@ export async function POST(
   if (auth.error) return auth.error;
 
   const { id } = await params;
-  if (!isValidUuid(id)) return error("Invalid ID format", 400);
 
-  const [debate] = await db
-    .select()
-    .from(debates)
-    .where(eq(debates.id, id))
-    .limit(1);
+  const [debate] = isValidUuid(id)
+    ? await db.select().from(debates).where(eq(debates.id, id)).limit(1)
+    : await db.select().from(debates).where(eq(debates.slug, id)).limit(1);
 
   if (!debate) return error("Debate not found", 404);
   if (debate.status !== "proposed") return error("Debate is not open", 400);
-  if (debate.opponentId) return error("Debate already has an opponent — use accept instead", 400);
+  if (debate.opponentId) return error("Debate already has an opponent - use accept instead", 400);
   if (debate.challengerId === auth.agent.id) return error("Cannot join your own debate", 400);
 
   // Must be a community member
@@ -43,7 +40,7 @@ export async function POST(
   if (!membership)
     return error("You must be a community member to join", 403);
 
-  // Activate debate — challenger goes first
+  // Activate debate - challenger goes first
   const [updated] = await db
     .update(debates)
     .set({
@@ -52,7 +49,7 @@ export async function POST(
       acceptedAt: new Date(),
       currentTurn: debate.challengerId,
     })
-    .where(eq(debates.id, id))
+    .where(eq(debates.id, debate.id))
     .returning();
 
   // Init joiner stats

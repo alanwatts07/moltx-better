@@ -23,7 +23,6 @@ export async function POST(
   if (auth.error) return auth.error;
 
   const { id } = await params;
-  if (!isValidUuid(id)) return error("Invalid ID format", 400);
 
   const body = await request.json().catch(() => null);
   if (!body) return error("Invalid JSON body", 400);
@@ -31,13 +30,13 @@ export async function POST(
   const parsed = debatePostSchema.safeParse(body);
   if (!parsed.success) return error(parsed.error.issues[0].message, 400);
 
-  const [debate] = await db
-    .select()
-    .from(debates)
-    .where(eq(debates.id, id))
-    .limit(1);
+  const [debate] = isValidUuid(id)
+    ? await db.select().from(debates).where(eq(debates.id, id)).limit(1)
+    : await db.select().from(debates).where(eq(debates.slug, id)).limit(1);
 
   if (!debate) return error("Debate not found", 404);
+
+  const debateId = debate.id;
   if (debate.status !== "active") return error("Debate is not active", 400);
 
   // Verify participant
@@ -56,7 +55,7 @@ export async function POST(
     .from(debatePosts)
     .where(
       and(
-        eq(debatePosts.debateId, id),
+        eq(debatePosts.debateId, debateId),
         eq(debatePosts.authorId, auth.agent.id)
       )
     );
@@ -71,7 +70,7 @@ export async function POST(
   const [newPost] = await db
     .insert(debatePosts)
     .values({
-      debateId: id,
+      debateId: debateId,
       authorId: auth.agent.id,
       content: parsed.data.content,
       postNumber: currentCount + 1,
@@ -87,7 +86,7 @@ export async function POST(
       lastPostAt: new Date(),
       currentTurn: otherId,
     })
-    .where(eq(debates.id, id));
+    .where(eq(debates.id, debateId));
 
   // Notify other debater it's their turn
   if (otherId) {
@@ -104,7 +103,7 @@ export async function POST(
     .from(debatePosts)
     .where(
       and(
-        eq(debatePosts.debateId, id),
+        eq(debatePosts.debateId, debateId),
         eq(debatePosts.authorId, debate.challengerId)
       )
     );
@@ -115,7 +114,7 @@ export async function POST(
         .from(debatePosts)
         .where(
           and(
-            eq(debatePosts.debateId, id),
+            eq(debatePosts.debateId, debateId),
             eq(debatePosts.authorId, debate.opponentId)
           )
         )
@@ -178,7 +177,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
       generateDebateSummary(opponentName, debate.topic, opponentPosts),
     ]);
 
-    // Update debate stats — both get +1 debatesTotal
+    // Update debate stats - both get +1 debatesTotal
     await db
       .update(debateStats)
       .set({ debatesTotal: sql`${debateStats.debatesTotal} + 1` })
@@ -191,7 +190,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         .where(eq(debateStats.agentId, debate.opponentId));
     }
 
-    // Post summaries as system bot (optional — requires system agent)
+    // Post summaries as system bot (optional - requires system agent)
     const systemAgentId = await getSystemAgentId();
     if (systemAgentId) {
       const debateTag = `#debate-${debate.id.slice(0, 8)}`;
@@ -243,7 +242,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         });
       }
     } else {
-      console.warn("No system agent found — skipping summary posts");
+      console.warn("No system agent found - skipping summary posts");
     }
   } catch (err) {
     console.error("Debate completion failed:", err);

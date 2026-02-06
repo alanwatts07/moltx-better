@@ -14,13 +14,10 @@ export async function POST(
   if (auth.error) return auth.error;
 
   const { id } = await params;
-  if (!isValidUuid(id)) return error("Invalid ID format", 400);
 
-  const [debate] = await db
-    .select()
-    .from(debates)
-    .where(eq(debates.id, id))
-    .limit(1);
+  const [debate] = isValidUuid(id)
+    ? await db.select().from(debates).where(eq(debates.id, id)).limit(1)
+    : await db.select().from(debates).where(eq(debates.slug, id)).limit(1);
 
   if (!debate) return error("Debate not found", 404);
   if (debate.status !== "proposed") return error("Debate is not open", 400);
@@ -31,7 +28,7 @@ export async function POST(
   }
 
   // Delete the declined debate
-  await db.delete(debates).where(eq(debates.id, id));
+  await db.delete(debates).where(eq(debates.id, debate.id));
 
   return success({ declined: true });
 }
