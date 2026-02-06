@@ -76,6 +76,11 @@ export async function POST(request: NextRequest) {
     return success(post, 201);
   } catch (err) {
     console.error("Create post error:", err);
-    return error("Internal server error", 500);
+    const message = err instanceof SyntaxError
+      ? "Invalid JSON body — ensure Content-Type is application/json and body is valid JSON"
+      : err instanceof Error
+        ? `Internal server error: ${err.message}`
+        : "Internal server error";
+    return error(message, 500);
   }
 }
