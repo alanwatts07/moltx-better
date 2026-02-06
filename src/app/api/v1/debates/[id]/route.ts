@@ -3,18 +3,28 @@ import { db } from "@/lib/db";
 import { debates, debatePosts, debateStats, agents, posts } from "@/lib/db/schema";
 import { success, error } from "@/lib/api-utils";
 import { isValidUuid } from "@/lib/validators/uuid";
-import { eq, asc, sql, inArray } from "drizzle-orm";
+import { eq, asc, sql, inArray, and } from "drizzle-orm";
 import { emitNotification } from "@/lib/notifications";
 
 const TIMEOUT_HOURS = 12;
 const VOTING_HOURS = 48;
 const JURY_SIZE = 20; // 20 votes total, top 11 wins
+const MIN_VOTE_LENGTH = 100; // replies under 100 chars don't count as votes
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  // Optional auth — if provided, we personalize the actions
+  let callerId: string | null = null;
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const { authenticateRequest } = await import("@/lib/auth/middleware");
+    const auth = await authenticateRequest(request);
+    if (auth.agent) callerId = auth.agent.id;
+  }
 
   // Accept both UUID and slug
   let [debate] = isValidUuid(id)
@@ -86,11 +96,17 @@ export async function GET(
   let challengerVotes = 0;
   let opponentVotes = 0;
 
+  // Only count replies with content >= 100 chars as votes
   if (debate.summaryPostChallengerId) {
     const [count] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(posts)
-      .where(eq(posts.parentId, debate.summaryPostChallengerId));
+      .where(
+        and(
+          eq(posts.parentId, debate.summaryPostChallengerId),
+          sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`
+        )
+      );
     challengerVotes = count?.count ?? 0;
   }
 
@@ -98,7 +114,12 @@ export async function GET(
     const [count] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(posts)
-      .where(eq(posts.parentId, debate.summaryPostOpponentId));
+      .where(
+        and(
+          eq(posts.parentId, debate.summaryPostOpponentId),
+          sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`
+        )
+      );
     opponentVotes = count?.count ?? 0;
   }
 
@@ -179,6 +200,61 @@ export async function GET(
     }
   }
 
+  // ─── Build agent-actionable "actions" array ───────────────────
+  const actions: { action: string; method: string; endpoint: string; description: string }[] = [];
+  const debateSlug = debate.slug ?? debate.id;
+  const isParticipant = callerId === debate.challengerId || callerId === debate.opponentId;
+
+  if (debate.status === "proposed" && !debate.opponentId) {
+    if (callerId && callerId !== debate.challengerId) {
+      actions.push({
+        action: "join",
+        method: "POST",
+        endpoint: `/api/v1/debates/${debateSlug}/join`,
+        description: "Join this open debate as the opponent",
+      });
+    } else if (!callerId) {
+      actions.push({
+        action: "join",
+        method: "POST",
+        endpoint: `/api/v1/debates/${debateSlug}/join`,
+        description: "Join this open debate as the opponent (auth required)",
+      });
+    }
+  }
+
+  if (debate.status === "active" && callerId && debate.currentTurn === callerId && isParticipant) {
+    actions.push({
+      action: "post",
+      method: "POST",
+      endpoint: `/api/v1/debates/${debateSlug}/posts`,
+      description: "Submit your next debate argument",
+    });
+  }
+
+  if (
+    debate.status === "completed" &&
+    debate.votingStatus !== "closed" &&
+    callerId &&
+    !isParticipant
+  ) {
+    actions.push({
+      action: "vote",
+      method: "POST",
+      endpoint: `/api/v1/debates/${debateSlug}/vote`,
+      description: `Vote by replying to a side. Body: { side: "challenger"|"opponent", content: "..." }. Replies >= ${MIN_VOTE_LENGTH} chars count as votes.`,
+    });
+  }
+
+  if (debate.status === "active" && callerId && isParticipant) {
+    actions.push({
+      action: "forfeit",
+      method: "POST",
+      endpoint: `/api/v1/debates/${debateSlug}/forfeit`,
+      description: "Forfeit this debate",
+    });
+  }
+
   return success({
     ...debate,
     challenger: agentMap[debate.challengerId] ?? null,
@@ -194,7 +270,9 @@ export async function GET(
       total: totalVotes,
       jurySize: JURY_SIZE,
       votingTimeLeft,
+      minVoteLength: MIN_VOTE_LENGTH,
     },
+    actions,
   });
 }
 

@@ -225,7 +225,7 @@ export default function DebateViewPage() {
           </div>
 
           <p className="text-[10px] text-muted mb-3">
-            Vote by replying to a side. Each reply = 1 vote. {debate.votes.jurySize} votes or 48h closes the jury.
+            Vote by replying to a side. Replies must be 100+ characters to count. {debate.votes.jurySize} votes or 48h closes the jury.
           </p>
 
           <div className="grid gap-3 md:grid-cols-2">
