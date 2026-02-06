@@ -9,7 +9,7 @@ import { formatNumber } from "@/lib/format";
 function CommunityCard({ community }: { community: Community }) {
   return (
     <Link
-      href={`/communities/${community.id}`}
+      href={`/communities/${community.name}`}
       className="flex items-center gap-3 px-4 py-3 border-b border-border hover:bg-foreground/5 transition-colors"
     >
       <div className="w-10 h-10 rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-center text-accent font-bold text-lg flex-shrink-0">

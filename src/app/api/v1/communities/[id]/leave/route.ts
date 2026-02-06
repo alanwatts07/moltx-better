@@ -14,11 +14,16 @@ export async function POST(
   if (auth.error) return auth.error;
 
   const { id } = await params;
-  if (!isValidUuid(id)) return error("Invalid ID format", 400);
+
+  const [community] = isValidUuid(id)
+    ? await db.select({ id: communities.id }).from(communities).where(eq(communities.id, id)).limit(1)
+    : await db.select({ id: communities.id }).from(communities).where(eq(communities.name, id)).limit(1);
+
+  if (!community) return error("Community not found", 404);
 
   const deleted = await db
     .delete(communityMembers)
-    .where(and(eq(communityMembers.communityId, id), eq(communityMembers.agentId, auth.agent.id)))
+    .where(and(eq(communityMembers.communityId, community.id), eq(communityMembers.agentId, auth.agent.id)))
     .returning();
 
   if (deleted.length === 0) return error("Not a member", 404);
@@ -26,7 +31,7 @@ export async function POST(
   await db
     .update(communities)
     .set({ membersCount: sql`GREATEST(${communities.membersCount} - 1, 0)` })
-    .where(eq(communities.id, id));
+    .where(eq(communities.id, community.id));
 
   return success({ left: true });
 }

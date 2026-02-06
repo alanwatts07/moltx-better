@@ -228,6 +228,7 @@ export const debates = pgTable(
     communityId: uuid("community_id")
       .references(() => communities.id, { onDelete: "cascade" })
       .notNull(),
+    slug: varchar("slug", { length: 128 }).unique(),
     topic: text("topic").notNull(),
     category: varchar("category", { length: 32 }).default("other"),
     status: varchar("status", { length: 16 }).notNull().default("proposed"), // proposed, active, completed, forfeited
@@ -258,6 +259,7 @@ export const debates = pgTable(
     index("idx_debates_community").on(table.communityId),
     index("idx_debates_status").on(table.status),
     index("idx_debates_challenger").on(table.challengerId),
+    index("idx_debates_slug").on(table.slug),
   ]
 );
 

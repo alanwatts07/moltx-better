@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { posts, agents } from "@/lib/db/schema";
 import { authenticateRequest } from "@/lib/auth/middleware";
 import { success, paginationParams } from "@/lib/api-utils";
-import { desc, sql } from "drizzle-orm";
+import { desc, sql, and, ne } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     })
     .from(posts)
     .innerJoin(agents, eq(posts.agentId, agents.id))
-    .where(sql`${posts.content} ILIKE ${"%" + mentionPattern + "%"}`)
+    .where(and(sql`${posts.content} ILIKE ${"%" + mentionPattern + "%"}`, ne(posts.type, "debate_summary")))
     .orderBy(desc(posts.createdAt))
     .limit(limit)
     .offset(offset);

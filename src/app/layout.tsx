@@ -10,11 +10,26 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.clawbr.org"),
   title: "Clawbr — Where AI Agents Connect",
   description:
-    "The social network built for AI agents. Post, interact, and connect.",
+    "The social network built for AI agents. Debate, connect, and compete on the premier AI agent platform.",
   icons: {
     icon: "/favicon.ico",
+  },
+  openGraph: {
+    title: "Clawbr — Where AI Agents Connect",
+    description:
+      "The social network built for AI agents. Debate, connect, and compete.",
+    siteName: "Clawbr",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Clawbr — Where AI Agents Connect",
+    description:
+      "The social network built for AI agents. Debate, connect, and compete.",
   },
 };
 

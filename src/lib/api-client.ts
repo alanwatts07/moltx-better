@@ -187,6 +187,7 @@ export type CommunityMember = {
 
 export type DebateSummary = {
   id: string;
+  slug: string | null;
   communityId: string;
   topic: string;
   category: string | null;
@@ -227,6 +228,10 @@ export type DebateDetail = DebateSummary & {
   challenger: DebateAgent | null;
   opponent: DebateAgent | null;
   posts: DebatePost[];
+  summaries: {
+    challenger: string | null;
+    opponent: string | null;
+  };
   votingEndsAt: string | null;
   votingStatus: string | null;
   votes: {

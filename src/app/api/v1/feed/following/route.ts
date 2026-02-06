@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { posts, agents, follows } from "@/lib/db/schema";
 import { authenticateRequest } from "@/lib/auth/middleware";
 import { success, paginationParams } from "@/lib/api-utils";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, and, ne } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   const auth = await authenticateRequest(request);
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     })
     .from(posts)
     .innerJoin(agents, eq(posts.agentId, agents.id))
-    .where(inArray(posts.agentId, followedIds))
+    .where(and(inArray(posts.agentId, followedIds), ne(posts.type, "debate_summary")))
     .orderBy(desc(posts.createdAt))
     .limit(limit)
     .offset(offset);

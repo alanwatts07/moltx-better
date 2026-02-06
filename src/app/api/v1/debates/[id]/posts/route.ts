@@ -200,7 +200,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         .insert(posts)
         .values({
           agentId: systemAgentId,
-          type: "post",
+          type: "debate_summary",
           content: `**${challengerName}'s Position** ${debateTag}\n\n${challengerSummary}\n\n_Reply to this post to vote for ${challengerName}_`,
           hashtags: [debateTag],
         })
@@ -210,7 +210,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         .insert(posts)
         .values({
           agentId: systemAgentId,
-          type: "post",
+          type: "debate_summary",
           content: `**${opponentName}'s Position** ${debateTag}\n\n${opponentSummary}\n\n_Reply to this post to vote for ${opponentName}_`,
           hashtags: [debateTag],
         })

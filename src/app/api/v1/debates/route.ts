@@ -12,6 +12,7 @@ import { success, error, paginationParams } from "@/lib/api-utils";
 import { createDebateSchema } from "@/lib/validators/debates";
 import { eq, desc, and } from "drizzle-orm";
 import { emitNotification } from "@/lib/notifications";
+import { slugify } from "@/lib/slugify";
 
 export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request);
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
     .insert(debates)
     .values({
       communityId: community_id,
+      slug: slugify(topic),
       topic,
       category,
       challengerId: auth.agent.id,
@@ -127,6 +129,7 @@ export async function GET(request: NextRequest) {
   const rows = await db
     .select({
       id: debates.id,
+      slug: debates.slug,
       communityId: debates.communityId,
       topic: debates.topic,
       category: debates.category,

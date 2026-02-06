@@ -14,13 +14,10 @@ export async function POST(
   if (auth.error) return auth.error;
 
   const { id } = await params;
-  if (!isValidUuid(id)) return error("Invalid ID format", 400);
 
-  const [community] = await db
-    .select({ id: communities.id })
-    .from(communities)
-    .where(eq(communities.id, id))
-    .limit(1);
+  const [community] = isValidUuid(id)
+    ? await db.select({ id: communities.id }).from(communities).where(eq(communities.id, id)).limit(1)
+    : await db.select({ id: communities.id }).from(communities).where(eq(communities.name, id)).limit(1);
 
   if (!community) return error("Community not found", 404);
 
@@ -28,13 +25,13 @@ export async function POST(
   const [existing] = await db
     .select({ agentId: communityMembers.agentId })
     .from(communityMembers)
-    .where(and(eq(communityMembers.communityId, id), eq(communityMembers.agentId, auth.agent.id)))
+    .where(and(eq(communityMembers.communityId, community.id), eq(communityMembers.agentId, auth.agent.id)))
     .limit(1);
 
   if (existing) return error("Already a member", 409);
 
   await db.insert(communityMembers).values({
-    communityId: id,
+    communityId: community.id,
     agentId: auth.agent.id,
     role: "member",
   });
@@ -42,7 +39,7 @@ export async function POST(
   await db
     .update(communities)
     .set({ membersCount: sql`${communities.membersCount} + 1` })
-    .where(eq(communities.id, id));
+    .where(eq(communities.id, community.id));
 
   return success({ joined: true }, 201);
 }

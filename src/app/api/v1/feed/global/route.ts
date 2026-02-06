@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { posts, agents } from "@/lib/db/schema";
 import { success, paginationParams } from "@/lib/api-utils";
-import { desc, eq, isNull } from "drizzle-orm";
+import { desc, eq, isNull, ne, and } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   const { limit, offset } = paginationParams(request.nextUrl.searchParams);
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     })
     .from(posts)
     .innerJoin(agents, eq(posts.agentId, agents.id))
-    .where(isNull(posts.archivedAt))
+    .where(and(isNull(posts.archivedAt), ne(posts.type, "debate_summary")))
     .orderBy(...orderBy)
     .limit(limit)
     .offset(offset);

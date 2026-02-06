@@ -15,15 +15,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  if (!isValidUuid(id)) return error("Invalid ID format", 400);
 
-  let [debate] = await db
-    .select()
-    .from(debates)
-    .where(eq(debates.id, id))
-    .limit(1);
+  // Accept both UUID and slug
+  let [debate] = isValidUuid(id)
+    ? await db.select().from(debates).where(eq(debates.id, id)).limit(1)
+    : await db.select().from(debates).where(eq(debates.slug, id)).limit(1);
 
   if (!debate) return error("Debate not found", 404);
+
+  const debateId = debate.id;
 
   // Lazy timeout check — auto-forfeit if 12hrs since last post
   if (debate.status === "active" && debate.lastPostAt && debate.currentTurn) {
@@ -45,7 +45,7 @@ export async function GET(
           winnerId,
           completedAt: new Date(),
         })
-        .where(eq(debates.id, id));
+        .where(eq(debates.id, debateId));
 
       if (winnerId) {
         await db
@@ -70,7 +70,7 @@ export async function GET(
       [debate] = await db
         .select()
         .from(debates)
-        .where(eq(debates.id, id))
+        .where(eq(debates.id, debateId))
         .limit(1);
     }
   }
@@ -79,7 +79,7 @@ export async function GET(
   const debatePostsList = await db
     .select()
     .from(debatePosts)
-    .where(eq(debatePosts.debateId, id))
+    .where(eq(debatePosts.debateId, debateId))
     .orderBy(asc(debatePosts.postNumber));
 
   // Vote counts (replies on summary posts)
@@ -120,7 +120,7 @@ export async function GET(
       [debate] = await db
         .select()
         .from(debates)
-        .where(eq(debates.id, id))
+        .where(eq(debates.id, debateId))
         .limit(1);
     }
   }
@@ -147,6 +147,27 @@ export async function GET(
 
   const agentMap = Object.fromEntries(agentRows.map((a) => [a.id, a]));
 
+  // Fetch summary post content (if summaries exist)
+  let challengerSummary: string | null = null;
+  let opponentSummary: string | null = null;
+
+  if (debate.summaryPostChallengerId) {
+    const [sp] = await db
+      .select({ content: posts.content })
+      .from(posts)
+      .where(eq(posts.id, debate.summaryPostChallengerId))
+      .limit(1);
+    challengerSummary = sp?.content ?? null;
+  }
+  if (debate.summaryPostOpponentId) {
+    const [sp] = await db
+      .select({ content: posts.content })
+      .from(posts)
+      .where(eq(posts.id, debate.summaryPostOpponentId))
+      .limit(1);
+    opponentSummary = sp?.content ?? null;
+  }
+
   // Compute voting time remaining
   let votingTimeLeft: string | null = null;
   if (debate.votingEndsAt && debate.votingStatus !== "closed") {
@@ -163,6 +184,10 @@ export async function GET(
     challenger: agentMap[debate.challengerId] ?? null,
     opponent: debate.opponentId ? agentMap[debate.opponentId] ?? null : null,
     posts: debatePostsList,
+    summaries: {
+      challenger: challengerSummary,
+      opponent: opponentSummary,
+    },
     votes: {
       challenger: challengerVotes,
       opponent: opponentVotes,

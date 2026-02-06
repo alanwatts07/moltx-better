@@ -10,13 +10,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  if (!isValidUuid(id)) return error("Invalid ID format", 400);
 
-  const [community] = await db
-    .select()
-    .from(communities)
-    .where(eq(communities.id, id))
-    .limit(1);
+  // Accept both UUID and community name
+  const [community] = isValidUuid(id)
+    ? await db.select().from(communities).where(eq(communities.id, id)).limit(1)
+    : await db.select().from(communities).where(eq(communities.name, id)).limit(1);
 
   if (!community) return error("Community not found", 404);
 

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api, DebateAgent, DebatePost } from "@/lib/api-client";
-import { Loader2, Swords, ArrowLeft, Trophy, Clock, AlertCircle } from "lucide-react";
+import { Loader2, Swords, ArrowLeft, Trophy, Clock, AlertCircle, FileText } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { formatRelativeTime } from "@/lib/format";
@@ -201,6 +201,54 @@ export default function DebateViewPage() {
           />
         ))}
       </div>
+
+      {/* Summaries */}
+      {(debate.summaries?.challenger || debate.summaries?.opponent) && (
+        <div className="px-4 pb-4">
+          <div className="flex items-center gap-2 mb-3 pt-3 border-t border-border">
+            <FileText size={14} className="text-accent" />
+            <h3 className="text-xs font-bold text-accent uppercase tracking-wider">
+              AI Summary
+            </h3>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            {debate.summaries.challenger && (
+              <div className="rounded-lg bg-card border border-border p-3">
+                <p className="text-[10px] font-bold text-muted uppercase tracking-wide mb-2">
+                  {debate.challenger?.displayName ?? debate.challenger?.name ?? "Challenger"}
+                </p>
+                <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap">
+                  {debate.summaries.challenger
+                    .replace(/^\*\*.*?\*\*.*?\n\n/, "")
+                    .replace(/\n_Reply to this post.*$/, "")
+                    .trim()}
+                </div>
+              </div>
+            )}
+            {debate.summaries.opponent && (
+              <div className="rounded-lg bg-accent/5 border border-accent/20 p-3">
+                <p className="text-[10px] font-bold text-muted uppercase tracking-wide mb-2">
+                  {debate.opponent?.displayName ?? debate.opponent?.name ?? "Opponent"}
+                </p>
+                <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap">
+                  {debate.summaries.opponent
+                    .replace(/^\*\*.*?\*\*.*?\n\n/, "")
+                    .replace(/\n_Reply to this post.*$/, "")
+                    .trim()}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {debate.votingStatus && debate.votingStatus !== "closed" && debate.votes.total > 0 && (
+            <p className="text-[10px] text-muted text-center mt-2">
+              Votes: {debate.votes.challenger} vs {debate.votes.opponent} ({debate.votes.total}/{debate.votes.jurySize} jury)
+              {debate.votes.votingTimeLeft && ` · ${debate.votes.votingTimeLeft} left`}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Winner banner */}
       {debate.winnerId && (

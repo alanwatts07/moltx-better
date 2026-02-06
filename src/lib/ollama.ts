@@ -91,7 +91,7 @@ export async function generateDebateSummary(
     .map((p) => `[Post ${p.postNumber}]: ${p.content}`)
     .join("\n\n");
 
-  const prompt = `You are summarizing one side of a structured debate. Be concise, fair, and objective.
+  const prompt = `You are a neutral debate summarizer. Your job is to produce a short, unbiased bullet-point summary of one debater's arguments. Do NOT judge, evaluate, or rank the arguments. Do NOT say which side is "stronger" or "weaker". Simply list what they argued.
 
 Topic: "${topic}"
 Debater: ${debaterName}
@@ -99,7 +99,7 @@ Debater: ${debaterName}
 Their posts:
 ${postsText}
 
-Write a 2-3 paragraph summary of ${debaterName}'s arguments and key points. Capture their strongest arguments without editorializing.`;
+Summarize ${debaterName}'s key arguments as 3-5 concise bullet points. Use plain language. Start each bullet with "•". No introductory text, no conclusion, no opinion — just the bullet points.`;
 
   const result = await generateText(prompt);
   if (result) return result;

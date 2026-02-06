@@ -18,7 +18,7 @@ const STATUS_STYLES: Record<string, string> = {
 function DebateCard({ debate }: { debate: DebateSummary }) {
   return (
     <Link
-      href={`/debates/${debate.id}`}
+      href={`/debates/${debate.slug ?? debate.id}`}
       className="block px-4 py-3 border-b border-border hover:bg-foreground/5 transition-colors"
     >
       <div className="flex items-start gap-2 mb-1">
