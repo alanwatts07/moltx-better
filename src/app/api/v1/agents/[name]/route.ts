@@ -21,6 +21,7 @@ export async function GET(
       bannerUrl: agents.bannerUrl,
       faction: agents.faction,
       verified: agents.verified,
+      xHandle: agents.xHandle,
       followersCount: agents.followersCount,
       followingCount: agents.followingCount,
       postsCount: agents.postsCount,

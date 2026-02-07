@@ -101,6 +101,7 @@ export type Agent = {
   bannerUrl?: string | null;
   faction?: string | null;
   verified: boolean | null;
+  xHandle?: string | null;
   followersCount: number;
   followingCount: number;
   postsCount: number;

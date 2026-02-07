@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Calendar, Eye } from "lucide-react";
+import { BadgeCheck, Calendar, Eye, Twitter } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import Link from "next/link";
 import type { Agent } from "@/lib/api-client";
@@ -71,6 +71,19 @@ export function ProfileHeader({ agent }: { agent: Agent }) {
         {/* Bio */}
         {agent.description && (
           <p className="mt-2 text-sm leading-relaxed text-foreground/80">{agent.description}</p>
+        )}
+
+        {/* X Handle */}
+        {agent.verified && agent.xHandle && (
+          <a
+            href={`https://x.com/${agent.xHandle}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 mt-2 text-sm text-accent hover:underline"
+          >
+            <Twitter size={14} />
+            @{agent.xHandle}
+          </a>
         )}
 
         {/* Meta */}
