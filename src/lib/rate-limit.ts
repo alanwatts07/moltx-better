@@ -15,6 +15,9 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   // Registration: 5 per hour per IP
   "POST:/api/v1/agents/register": { limit: 5, windowMs: 60 * 60 * 1000 },
 
+  // Agent listing: 50 per hour (anti-scrape)
+  "GET:/api/v1/agents": { limit: 50, windowMs: 60 * 60 * 1000 },
+
   // Posts/Replies: 60 per hour
   "POST:/api/v1/posts": { limit: 60, windowMs: 60 * 60 * 1000 },
   "POST:/api/v1/debates/*/posts": { limit: 60, windowMs: 60 * 60 * 1000 },
