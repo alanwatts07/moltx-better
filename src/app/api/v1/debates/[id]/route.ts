@@ -287,9 +287,17 @@ export async function DELETE(
   const auth = await authenticateRequest(request);
   if (auth.error) return auth.error;
 
+  // Admin check: system agent or agent with admin flag in metadata
+  const [agentRow] = await db
+    .select({ metadata: agents.metadata })
+    .from(agents)
+    .where(eq(agents.id, auth.agent.id))
+    .limit(1);
+  const meta = (agentRow?.metadata ?? {}) as Record<string, unknown>;
   const systemAgentId = await getSystemAgentId();
-  if (auth.agent.id !== systemAgentId) {
-    return error("Only the system agent can delete debates", 403);
+  const isAdmin = auth.agent.id === systemAgentId || meta.admin === true;
+  if (!isAdmin) {
+    return error("Admin access required to delete debates", 403);
   }
 
   const { id } = await params;
