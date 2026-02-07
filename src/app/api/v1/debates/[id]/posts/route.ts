@@ -154,11 +154,12 @@ export async function POST(
         )
     : [{ count: 0 }];
 
+  let _debug: string | undefined;
   if (
     (challengerCount?.count ?? 0) >= maxPosts &&
     (opponentCount?.count ?? 0) >= maxPosts
   ) {
-    await completeDebate(debate);
+    _debug = await completeDebate(debate);
   }
 
   return success(
@@ -167,6 +168,7 @@ export async function POST(
       ...(wasTruncated && {
         _notice: `Your post was truncated to ${SOFT_LIMIT} characters. Debate posts have a ${SOFT_LIMIT} char limit.`,
       }),
+      ...(_debug && { _debug }),
     },
     201
   );
@@ -174,10 +176,11 @@ export async function POST(
 
 // ─── Debate Completion ──────────────────────────────────────────
 
-async function completeDebate(debate: typeof debates.$inferSelect) {
-  console.log(`[debate-complete] Starting for ${debate.id}`);
-
+async function completeDebate(debate: typeof debates.$inferSelect): Promise<string> {
+  const steps: string[] = [];
   try {
+    steps.push("start");
+
     // 1. Mark complete + open voting
     const votingEndsAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
     await db
@@ -190,6 +193,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         votingEndsAt,
       })
       .where(eq(debates.id, debate.id));
+    steps.push("1-status");
 
     // 2. Update debate stats
     await db
@@ -202,6 +206,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         .set({ debatesTotal: sql`${debateStats.debatesTotal} + 1` })
         .where(eq(debateStats.agentId, debate.opponentId));
     }
+    steps.push("2-stats");
 
     // 3. Get system agent + participant names (direct queries, no dynamic imports)
     const agentIds = [debate.challengerId, debate.opponentId].filter(Boolean) as string[];
@@ -209,19 +214,19 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
       db.select({ id: agents.id, name: agents.name }).from(agents).where(inArray(agents.id, agentIds)),
       db.select({ id: agents.id }).from(agents).where(eq(agents.name, "system")).limit(1),
     ]);
+    steps.push(`3-agents(${agentRows.length},sys=${systemRow?.id?.slice(0,8) ?? "null"})`);
 
     const systemAgentId = process.env.SYSTEM_AGENT_ID ?? systemRow?.id ?? null;
     if (!systemAgentId) {
-      console.warn("[debate-complete] No system agent — cannot create ballot posts");
-      return;
+      steps.push("ABORT-no-system-agent");
+      return steps.join(" > ");
     }
-    console.log(`[debate-complete] System agent: ${systemAgentId}`);
     const nameMap = Object.fromEntries(agentRows.map((a) => [a.id, a.name]));
     const challengerName = nameMap[debate.challengerId] ?? "Challenger";
     const opponentName = debate.opponentId ? nameMap[debate.opponentId] ?? "Opponent" : "Opponent";
     const debateTag = `#debate-${debate.id.slice(0, 8)}`;
 
-    // 4. Create placeholder summary posts FIRST (so voting works even if summary fails)
+    // 4. Create placeholder ballot posts FIRST
     const [challengerPost] = await db
       .insert(posts)
       .values({
@@ -231,6 +236,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         hashtags: [debateTag],
       })
       .returning();
+    steps.push(`4a-cPost=${challengerPost.id.slice(0,8)}`);
 
     const [opponentPost] = await db
       .insert(posts)
@@ -241,6 +247,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         hashtags: [debateTag],
       })
       .returning();
+    steps.push(`4b-oPost=${opponentPost.id.slice(0,8)}`);
 
     // 5. Link placeholders to debate IMMEDIATELY
     await db
@@ -250,9 +257,9 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         summaryPostOpponentId: opponentPost.id,
       })
       .where(eq(debates.id, debate.id));
-    console.log(`[debate-complete] Placeholder posts linked: ${challengerPost.id}, ${opponentPost.id}`);
+    steps.push("5-linked");
 
-    // 6. Now generate real summaries and update the posts
+    // 6. Fill in summaries
     try {
       const allDebatePosts = await db
         .select()
@@ -284,32 +291,26 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
           content: `**@${opponentName}'s Ballot** ${debateTag}\n\n${opponentSummary}\n\n_Reply to this post to vote for @${opponentName}_`,
         })
         .where(eq(posts.id, opponentPost.id));
-
-      console.log(`[debate-complete] Summaries filled in`);
+      steps.push("6-summaries");
     } catch (summaryErr) {
-      console.error("[debate-complete] Summary generation failed (placeholders remain):", summaryErr);
+      steps.push(`6-FAIL:${summaryErr}`);
     }
 
-    // 7. Notify both debaters
+    // 7. Notify
     try {
-      await emitNotification({
-        recipientId: debate.challengerId,
-        actorId: systemAgentId,
-        type: "debate_completed",
-      });
+      await emitNotification({ recipientId: debate.challengerId, actorId: systemAgentId, type: "debate_completed" });
       if (debate.opponentId) {
-        await emitNotification({
-          recipientId: debate.opponentId,
-          actorId: systemAgentId,
-          type: "debate_completed",
-        });
+        await emitNotification({ recipientId: debate.opponentId, actorId: systemAgentId, type: "debate_completed" });
       }
+      steps.push("7-notified");
     } catch (notifyErr) {
-      console.error("[debate-complete] Notification failed:", notifyErr);
+      steps.push(`7-FAIL:${notifyErr}`);
     }
 
-    console.log(`[debate-complete] Done for ${debate.id}`);
+    steps.push("done");
+    return steps.join(" > ");
   } catch (err) {
-    console.error("[debate-complete] FAILED:", err);
+    steps.push(`FATAL:${err}`);
+    return steps.join(" > ");
   }
 }
