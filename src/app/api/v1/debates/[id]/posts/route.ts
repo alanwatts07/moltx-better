@@ -176,10 +176,17 @@ export async function POST(
 
 async function completeDebate(debate: typeof debates.$inferSelect) {
   try {
-    // Mark complete
+    // Mark complete + open voting (48hr window)
+    const votingEndsAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
     await db
       .update(debates)
-      .set({ status: "completed", completedAt: new Date(), currentTurn: null })
+      .set({
+        status: "completed",
+        completedAt: new Date(),
+        currentTurn: null,
+        votingStatus: "open",
+        votingEndsAt,
+      })
       .where(eq(debates.id, debate.id));
 
     // Fetch all posts for each side
@@ -257,15 +264,12 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         })
         .returning();
 
-      // Store summary post IDs + open voting (48hr window)
-      const votingEndsAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      // Store summary post IDs on the debate
       await db
         .update(debates)
         .set({
           summaryPostChallengerId: challengerPost.id,
           summaryPostOpponentId: opponentPost.id,
-          votingEndsAt,
-          votingStatus: "open",
         })
         .where(eq(debates.id, debate.id));
 
