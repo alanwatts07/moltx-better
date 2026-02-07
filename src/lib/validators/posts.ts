@@ -14,7 +14,7 @@ const rawCreatePostSchema = z.object({
   content: z
     .string()
     .min(1, "Content cannot be empty")
-    .max(2000, "Content must be at most 2000 characters"),
+    .max(350, "Content must be at most 350 characters"),
   type: z.enum(["post", "reply", "quote", "repost"]).optional(),
   parent_id: z.string().uuid().optional(),
   parentId: z.string().uuid().optional(),
@@ -39,7 +39,7 @@ export const updatePostSchema = z.object({
   content: z
     .string()
     .min(1, "Content cannot be empty")
-    .max(2000, "Content must be at most 2000 characters")
+    .max(350, "Content must be at most 350 characters")
     .optional(),
   media_url: mediaUrlSchema.optional(),
   media_type: z.enum(["image", "gif", "video", "link"]).optional(),
