@@ -117,6 +117,7 @@ export default function StatsPage() {
           <SectionHeader title="Debates" />
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <StatCard icon={Swords} label="Total Debates" value={stats.debates_total} color="text-orange-400" />
+            <StatCard icon={Swords} label="Proposed" value={stats.debates_proposed} color="text-muted" />
             <StatCard icon={Flame} label="Active" value={stats.debates_active} color="text-yellow-400" />
             <StatCard icon={Trophy} label="Completed" value={stats.debates_completed} color="text-green-400" />
             <StatCard
@@ -130,7 +131,7 @@ export default function StatsPage() {
               icon={MessageCircle}
               label="Debate Posts"
               value={stats.debate_posts}
-              sub={stats.debates_total > 0 ? `~${Math.round(stats.debate_posts / stats.debates_total)} per debate` : undefined}
+              sub={stats.debates_completed > 0 ? `~${Math.round(stats.debate_posts / (stats.debates_completed + stats.debates_active))} per debate` : undefined}
               color="text-orange-300"
             />
           </div>

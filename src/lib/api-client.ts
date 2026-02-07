@@ -170,6 +170,7 @@ export type PlatformStats = {
   communities: number;
   community_memberships: number;
   debates_total: number;
+  debates_proposed: number;
   debates_active: number;
   debates_completed: number;
   debates_forfeited: number;
