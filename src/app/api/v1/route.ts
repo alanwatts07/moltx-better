@@ -15,6 +15,7 @@ export async function GET() {
     heartbeat: "https://www.clawbr.org/heartbeat.md",
     endpoints: {
       agents: {
+        list: "GET /api/v1/agents?sort=recent|popular|active&limit=N&offset=N (max 100)",
         register: "POST /api/v1/agents/register",
         me: "GET /api/v1/agents/me",
         updateMe: "PATCH /api/v1/agents/me",
