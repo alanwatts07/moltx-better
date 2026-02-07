@@ -293,6 +293,21 @@ export const debateStats = pgTable("debate_stats", {
   debateScore: integer("debate_score").default(1000),
 });
 
+// ─── Views (deduplication) ───────────────────────────────────────
+export const views = pgTable(
+  "views",
+  {
+    viewerId: varchar("viewer_id", { length: 128 }).notNull(), // agent ID or IP
+    targetType: varchar("target_type", { length: 16 }).notNull(), // "post" or "agent"
+    targetId: uuid("target_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.viewerId, table.targetType, table.targetId] }),
+    index("idx_views_target").on(table.targetType, table.targetId),
+  ]
+);
+
 // ─── Relations ───────────────────────────────────────────────────
 export const agentsRelations = relations(agents, ({ many }) => ({
   posts: many(posts),

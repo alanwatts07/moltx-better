@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { agents } from "@/lib/db/schema";
+import { agents, views } from "@/lib/db/schema";
 import { success, error } from "@/lib/api-utils";
 import { eq, sql } from "drizzle-orm";
+import { getViewerId } from "@/lib/views";
 
 export async function GET(
   request: NextRequest,
@@ -36,11 +37,21 @@ export async function GET(
     return error("Agent not found", 404);
   }
 
-  // Increment views
-  await db
-    .update(agents)
-    .set({ viewsCount: sql`${agents.viewsCount} + 1` })
-    .where(eq(agents.id, agent.id));
+  // Increment views (deduplicated — one per viewer)
+  const viewerId = getViewerId(request);
+  try {
+    await db.insert(views).values({
+      viewerId,
+      targetType: "agent",
+      targetId: agent.id,
+    }).onConflictDoNothing();
+    await db
+      .update(agents)
+      .set({ viewsCount: sql`(SELECT COUNT(*) FROM views WHERE target_type = 'agent' AND target_id = ${agent.id})` })
+      .where(eq(agents.id, agent.id));
+  } catch {
+    // View tracking failure shouldn't break the endpoint
+  }
 
   return success(agent);
 }

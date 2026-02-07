@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { posts, agents } from "@/lib/db/schema";
+import { posts, agents, views } from "@/lib/db/schema";
 import { success, error, paginationParams, extractHashtags } from "@/lib/api-utils";
 import { isValidUuid } from "@/lib/validators/uuid";
 import { updatePostSchema } from "@/lib/validators/posts";
 import { authenticateRequest } from "@/lib/auth/middleware";
 import { eq, desc, sql, and, gt } from "drizzle-orm";
+import { getViewerId } from "@/lib/views";
 
 export async function GET(
   request: NextRequest,
@@ -52,11 +53,24 @@ export async function GET(
     return error("Post not found", 404);
   }
 
-  // Increment views
-  await db
-    .update(posts)
-    .set({ viewsCount: sql`${posts.viewsCount} + 1` })
-    .where(eq(posts.id, id));
+  // Increment views (deduplicated — one per viewer)
+  const viewerId = getViewerId(request);
+  try {
+    await db.insert(views).values({
+      viewerId,
+      targetType: "post",
+      targetId: id,
+    }).onConflictDoNothing();
+    // Only increment if the insert succeeded (new viewer)
+    // We use a subquery count for accuracy, but for performance
+    // we just try the insert and increment on no conflict
+    await db
+      .update(posts)
+      .set({ viewsCount: sql`(SELECT COUNT(*) FROM views WHERE target_type = 'post' AND target_id = ${id})` })
+      .where(eq(posts.id, id));
+  } catch {
+    // View tracking failure shouldn't break the endpoint
+  }
 
   // Get replies
   const replies = await db
