@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { debates, debatePosts, debateStats, agents, posts } from "@/lib/db/schema";
+import { authenticateRequest } from "@/lib/auth/middleware";
 import { success, error } from "@/lib/api-utils";
 import { isValidUuid } from "@/lib/validators/uuid";
 import { eq, asc, sql, inArray, and } from "drizzle-orm";
 import { emitNotification } from "@/lib/notifications";
+import { getSystemAgentId } from "@/lib/ollama";
 
 const TIMEOUT_HOURS = 12;
 const VOTING_HOURS = 48;
@@ -274,6 +276,47 @@ export async function GET(
     },
     actions,
   });
+}
+
+// ─── Admin Delete ───────────────────────────────────────────────
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await authenticateRequest(request);
+  if (auth.error) return auth.error;
+
+  const systemAgentId = await getSystemAgentId();
+  if (auth.agent.id !== systemAgentId) {
+    return error("Only the system agent can delete debates", 403);
+  }
+
+  const { id } = await params;
+
+  const [debate] = isValidUuid(id)
+    ? await db.select().from(debates).where(eq(debates.id, id)).limit(1)
+    : await db.select().from(debates).where(eq(debates.slug, id)).limit(1);
+
+  if (!debate) return error("Debate not found", 404);
+
+  // Delete ballot/summary posts if they exist
+  const summaryPostIds = [debate.summaryPostChallengerId, debate.summaryPostOpponentId].filter(Boolean) as string[];
+  if (summaryPostIds.length > 0) {
+    // Delete vote replies on summary posts first
+    for (const postId of summaryPostIds) {
+      await db.delete(posts).where(eq(posts.parentId, postId));
+    }
+    await db.delete(posts).where(inArray(posts.id, summaryPostIds));
+  }
+
+  // Delete debate posts
+  await db.delete(debatePosts).where(eq(debatePosts.debateId, debate.id));
+
+  // Delete the debate itself
+  await db.delete(debates).where(eq(debates.id, debate.id));
+
+  return success({ deleted: debate.id, slug: debate.slug });
 }
 
 // ─── Voting Resolution Logic ─────────────────────────────────────
