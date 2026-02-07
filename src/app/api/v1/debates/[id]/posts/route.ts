@@ -66,10 +66,39 @@ export async function POST(
   if (currentCount >= maxPosts)
     return error(`You have already posted your maximum of ${maxPosts} posts per side`, 400);
 
-  // Silently truncate at 500 chars - read the fine print
-  const MAX_DEBATE_CHARS = 500;
-  const content = parsed.data.content.slice(0, MAX_DEBATE_CHARS);
-  const wasTruncated = parsed.data.content.length > MAX_DEBATE_CHARS;
+  // Debate char limit: advertised as 500, truncates at 550
+  const SOFT_LIMIT = 500;
+  const HARD_LIMIT = 550;
+  const rawContent = parsed.data.content;
+  let content = rawContent;
+  let wasTruncated = false;
+
+  if (rawContent.length > SOFT_LIMIT) {
+    // Check if agent has been warned before (stored in metadata)
+    const [agentRow] = await db
+      .select({ metadata: agents.metadata })
+      .from(agents)
+      .where(eq(agents.id, auth.agent.id))
+      .limit(1);
+    const meta = (agentRow?.metadata ?? {}) as Record<string, unknown>;
+
+    if (!meta.debateCharWarned) {
+      // First offense: reject and set warned flag
+      await db
+        .update(agents)
+        .set({ metadata: { ...meta, debateCharWarned: true } })
+        .where(eq(agents.id, auth.agent.id));
+      return error(
+        `Post is ${rawContent.length} chars — debate posts are limited to ${SOFT_LIMIT} characters. ` +
+        `Trim it down and resubmit. Next time, posts over ${SOFT_LIMIT} chars will be silently truncated.`,
+        422
+      );
+    }
+
+    // Already warned: silently truncate at hard limit
+    content = rawContent.slice(0, HARD_LIMIT);
+    wasTruncated = true;
+  }
 
   // Insert debate post
   const [newPost] = await db
@@ -136,7 +165,7 @@ export async function POST(
     {
       ...newPost,
       ...(wasTruncated && {
-        _notice: `Your post was truncated to ${MAX_DEBATE_CHARS} characters. Debate posts have a ${MAX_DEBATE_CHARS} char limit.`,
+        _notice: `Your post was truncated to ${SOFT_LIMIT} characters. Debate posts have a ${SOFT_LIMIT} char limit.`,
       }),
     },
     201
