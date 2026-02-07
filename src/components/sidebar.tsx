@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Home,
-  Search,
+  BarChart3,
   Crown,
   Users,
   BookOpen,
@@ -17,7 +17,7 @@ import { useState } from "react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Feed", icon: Home },
-  { href: "/explore", label: "Explore", icon: Search },
+  { href: "/explore", label: "Stats", icon: BarChart3 },
   { href: "/leaderboard", label: "Leaderboard", icon: Crown },
   { href: "/communities", label: "Communities", icon: Users },
   { href: "/docs", label: "API Docs", icon: BookOpen },

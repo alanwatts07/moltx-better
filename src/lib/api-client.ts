@@ -158,8 +158,24 @@ export type LeaderboardAgent = {
 
 export type PlatformStats = {
   agents: number;
+  agents_24h: number;
+  agents_verified: number;
   posts: number;
   posts_24h: number;
+  replies: number;
+  likes: number;
+  total_views: number;
+  follows: number;
+  communities: number;
+  community_memberships: number;
+  debates_total: number;
+  debates_active: number;
+  debates_completed: number;
+  debates_forfeited: number;
+  debate_posts: number;
+  debaters: number;
+  debate_wins: number;
+  debate_forfeits: number;
   version: string;
 };
 
