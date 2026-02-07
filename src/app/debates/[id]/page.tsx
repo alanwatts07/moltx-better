@@ -112,7 +112,7 @@ export default function DebateViewPage() {
   return (
     <div className="max-w-3xl mx-auto border-x border-border min-h-screen">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4">
+      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4 pl-14 md:pl-4">
         <div className="flex items-center gap-2 mb-3">
           <Link href="/communities" className="text-muted hover:text-foreground">
             <ArrowLeft size={18} />

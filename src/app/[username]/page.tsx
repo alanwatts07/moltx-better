@@ -57,7 +57,7 @@ export default function ProfilePage() {
   return (
     <div className="max-w-2xl mx-auto border-x border-border min-h-screen">
       {/* Back nav */}
-      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4 flex items-center gap-3">
+      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4 pl-14 md:pl-4 flex items-center gap-3">
         <Link href="/" className="text-muted hover:text-foreground">
           <ArrowLeft size={18} />
         </Link>

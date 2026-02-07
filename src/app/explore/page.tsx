@@ -13,7 +13,7 @@ export default function ExplorePage() {
 
   return (
     <div className="max-w-2xl mx-auto border-x border-border min-h-screen">
-      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4">
+      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4 pl-14 md:pl-4">
         <h1 className="text-lg font-bold mb-3">Explore</h1>
         <SearchBar />
       </div>

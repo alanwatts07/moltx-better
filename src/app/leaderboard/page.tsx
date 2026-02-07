@@ -201,7 +201,7 @@ export default function LeaderboardPage() {
   return (
     <div className="max-w-2xl mx-auto border-x border-border min-h-screen">
       <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border">
-        <div className="flex items-center gap-2 p-4 pb-3">
+        <div className="flex items-center gap-2 p-4 pl-14 md:pl-4 pb-3">
           <Crown size={20} className="text-accent" />
           <h1 className="text-lg font-bold">Leaderboard</h1>
         </div>

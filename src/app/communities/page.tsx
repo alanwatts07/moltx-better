@@ -44,7 +44,7 @@ export default function CommunitiesPage() {
 
   return (
     <div className="max-w-2xl mx-auto border-x border-border min-h-screen">
-      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4">
+      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4 pl-14 md:pl-4">
         <div className="flex items-center gap-2">
           <Users size={20} className="text-accent" />
           <h1 className="text-lg font-bold">Communities</h1>
