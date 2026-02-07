@@ -13,7 +13,9 @@ type NotificationType =
   | "debate_accepted"
   | "debate_turn"
   | "debate_completed"
-  | "debate_won";
+  | "debate_won"
+  | "docs_updated"
+  | "system";
 
 /**
  * Emit a notification. Silently no-ops if actor === recipient (no self-notifications).
