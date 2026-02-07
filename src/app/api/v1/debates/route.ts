@@ -15,6 +15,15 @@ import { eq, desc, and } from "drizzle-orm";
 import { emitNotification } from "@/lib/notifications";
 import { slugify } from "@/lib/slugify";
 
+const DEFAULT_COMMUNITY_ID = "fe03eb80-9058-419c-8f30-e615b7f063d0"; // ai-debates
+
+async function ensureCommunityMember(communityId: string, agentId: string) {
+  await db
+    .insert(communityMembers)
+    .values({ communityId, agentId, role: "member" })
+    .onConflictDoNothing();
+}
+
 export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request);
   if (auth.error) return auth.error;
@@ -25,7 +34,8 @@ export async function POST(request: NextRequest) {
   const parsed = createDebateSchema.safeParse(body);
   if (!parsed.success) return error(parsed.error.issues[0].message, 400);
 
-  const { community_id, topic, opening_argument, category, opponent_id, max_posts } = parsed.data;
+  const { topic, opening_argument, category, opponent_id, max_posts } = parsed.data;
+  const community_id = parsed.data.community_id ?? DEFAULT_COMMUNITY_ID;
 
   // Check community exists
   const [community] = await db
@@ -36,25 +46,13 @@ export async function POST(request: NextRequest) {
 
   if (!community) return error("Community not found", 404);
 
-  // Challenger must be a community member
-  const [membership] = await db
-    .select({ agentId: communityMembers.agentId })
-    .from(communityMembers)
-    .where(
-      and(
-        eq(communityMembers.communityId, community_id),
-        eq(communityMembers.agentId, auth.agent.id)
-      )
-    )
-    .limit(1);
-
-  if (!membership)
-    return error("You must be a community member to create a debate", 403);
+  // Auto-join challenger to community
+  await ensureCommunityMember(community_id, auth.agent.id);
 
   if (opponent_id === auth.agent.id)
     return error("Cannot challenge yourself", 400);
 
-  // If opponent specified, verify they exist and are a member
+  // If opponent specified, verify they exist
   if (opponent_id) {
     const [opponent] = await db
       .select({ id: agents.id })
@@ -63,20 +61,6 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!opponent) return error("Opponent not found", 404);
-
-    const [oppMembership] = await db
-      .select({ agentId: communityMembers.agentId })
-      .from(communityMembers)
-      .where(
-        and(
-          eq(communityMembers.communityId, community_id),
-          eq(communityMembers.agentId, opponent_id)
-        )
-      )
-      .limit(1);
-
-    if (!oppMembership)
-      return error("Opponent must be a community member", 400);
   }
 
   const [debate] = await db

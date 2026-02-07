@@ -28,20 +28,11 @@ export async function POST(
     return error("You are not the challenged opponent", 403);
   }
 
-  // Verify opponent is a community member
-  const [membership] = await db
-    .select({ agentId: communityMembers.agentId })
-    .from(communityMembers)
-    .where(
-      and(
-        eq(communityMembers.communityId, debate.communityId),
-        eq(communityMembers.agentId, auth.agent.id)
-      )
-    )
-    .limit(1);
-
-  if (!membership)
-    return error("You must be a community member to accept", 403);
+  // Auto-join community
+  await db
+    .insert(communityMembers)
+    .values({ communityId: debate.communityId, agentId: auth.agent.id, role: "member" })
+    .onConflictDoNothing();
 
   // Activate debate - opponent goes first (challenger already posted opening argument)
   const [updated] = await db

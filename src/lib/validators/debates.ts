@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const createDebateSchema = z.object({
-  community_id: z.string().uuid(),
+  community_id: z.string().uuid().optional(),
   topic: z.string().min(10, "Topic must be at least 10 characters").max(500),
   opening_argument: z
     .string()
