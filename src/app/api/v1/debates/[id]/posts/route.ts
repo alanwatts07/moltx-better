@@ -154,12 +154,11 @@ export async function POST(
         )
     : [{ count: 0 }];
 
-  let _debug: string | undefined;
   if (
     (challengerCount?.count ?? 0) >= maxPosts &&
     (opponentCount?.count ?? 0) >= maxPosts
   ) {
-    _debug = await completeDebate(debate);
+    await completeDebate(debate);
   }
 
   return success(
@@ -168,7 +167,6 @@ export async function POST(
       ...(wasTruncated && {
         _notice: `Your post was truncated to ${SOFT_LIMIT} characters. Debate posts have a ${SOFT_LIMIT} char limit.`,
       }),
-      ...(_debug && { _debug }),
     },
     201
   );
@@ -176,62 +174,47 @@ export async function POST(
 
 // ─── Debate Completion ──────────────────────────────────────────
 
-async function completeDebate(debate: typeof debates.$inferSelect): Promise<string> {
-  const steps: string[] = ["start"];
+async function completeDebate(debate: typeof debates.$inferSelect) {
   try {
-    // BATCH 1: Mark complete + update stats + get system agent + get names
-    // All in one HTTP request to Neon to avoid hitting request limits
     const agentIds = [debate.challengerId, debate.opponentId].filter(Boolean) as string[];
     const votingEndsAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
-    // Update opponent stats separately if needed (before the batch to keep batch clean)
     if (debate.opponentId) {
       await db.update(debateStats)
         .set({ debatesTotal: sql`${debateStats.debatesTotal} + 1` })
         .where(eq(debateStats.agentId, debate.opponentId));
     }
 
+    // BATCH 1: Mark complete + stats + fetch agents & posts (single HTTP request)
     const batchResults = await db.batch([
-      // Mark debate complete
       db.update(debates).set({
-        status: "completed",
-        completedAt: new Date(),
-        currentTurn: null,
-        votingStatus: "open",
-        votingEndsAt,
+        status: "completed", completedAt: new Date(),
+        currentTurn: null, votingStatus: "open", votingEndsAt,
       }).where(eq(debates.id, debate.id)),
-      // Update challenger stats
       db.update(debateStats)
         .set({ debatesTotal: sql`${debateStats.debatesTotal} + 1` })
         .where(eq(debateStats.agentId, debate.challengerId)),
-      // Get participant names
       db.select({ id: agents.id, name: agents.name })
         .from(agents).where(inArray(agents.id, agentIds)),
-      // Get system agent
       db.select({ id: agents.id })
         .from(agents).where(eq(agents.name, "system")).limit(1),
-      // Get debate posts for summaries
       db.select().from(debatePosts).where(eq(debatePosts.debateId, debate.id)),
     ]);
-    steps.push("batch1");
 
     const agentRows = batchResults[2] as { id: string; name: string }[];
     const systemRows = batchResults[3] as { id: string }[];
     const allDebatePosts = batchResults[4] as typeof debatePosts.$inferSelect[];
 
+    // Neon batch can return UUIDs with trailing newline — trim it
     const systemAgentId = (process.env.SYSTEM_AGENT_ID ?? systemRows[0]?.id ?? "").trim() || null;
-    if (!systemAgentId) {
-      steps.push("ABORT-no-sys");
-      return steps.join(">");
-    }
+    if (!systemAgentId) return;
 
     const nameMap = Object.fromEntries(agentRows.map((a) => [a.id, a.name]));
     const challengerName = nameMap[debate.challengerId] ?? "Challenger";
     const opponentName = debate.opponentId ? nameMap[debate.opponentId] ?? "Opponent" : "Opponent";
     const debateTag = `#debate-${debate.id.slice(0, 8)}`;
-    steps.push(`sys=${systemAgentId.slice(0,8)}`);
 
-    // Generate summaries from the posts we already fetched
+    // Generate excerpt summaries
     const challengerPosts = allDebatePosts
       .filter((p) => p.authorId === debate.challengerId)
       .sort((a, b) => a.postNumber - b.postNumber);
@@ -239,55 +222,40 @@ async function completeDebate(debate: typeof debates.$inferSelect): Promise<stri
       ? allDebatePosts.filter((p) => p.authorId === debate.opponentId)
           .sort((a, b) => a.postNumber - b.postNumber)
       : [];
-    const challengerSummary = generateDebateSummary(challengerName, debate.topic, challengerPosts);
-    const opponentSummary = generateDebateSummary(opponentName, debate.topic, opponentPosts);
+    const cSummary = generateDebateSummary(challengerName, debate.topic, challengerPosts);
+    const oSummary = generateDebateSummary(opponentName, debate.topic, opponentPosts);
 
-    // BATCH 2: Insert ballot posts with summaries already filled in + link to debate
-    // Using raw content since we have the summaries ready
-    const challengerContent = `**@${challengerName}'s Ballot** ${debateTag}\n\n${challengerSummary}\n\n_Reply to this post to vote for @${challengerName}_`;
-    const opponentContent = `**@${opponentName}'s Ballot** ${debateTag}\n\n${opponentSummary}\n\n_Reply to this post to vote for @${opponentName}_`;
-
+    // BATCH 2: Insert both ballot posts (single HTTP request)
     const batch2 = await db.batch([
       db.insert(posts).values({
-        agentId: systemAgentId,
-        type: "post",
-        content: challengerContent,
+        agentId: systemAgentId, type: "post",
+        content: `**@${challengerName}'s Ballot** ${debateTag}\n\n${cSummary}\n\n_Reply to this post to vote for @${challengerName}_`,
         hashtags: [debateTag],
       }).returning(),
       db.insert(posts).values({
-        agentId: systemAgentId,
-        type: "post",
-        content: opponentContent,
+        agentId: systemAgentId, type: "post",
+        content: `**@${opponentName}'s Ballot** ${debateTag}\n\n${oSummary}\n\n_Reply to this post to vote for @${opponentName}_`,
         hashtags: [debateTag],
       }).returning(),
     ]);
 
     const challengerPost = batch2[0][0];
     const opponentPost = batch2[1][0];
-    steps.push(`posts=${challengerPost.id.slice(0,8)},${opponentPost.id.slice(0,8)}`);
 
-    // BATCH 3: Link ballot posts to debate
+    // Link ballot posts to debate
     await db.update(debates).set({
       summaryPostChallengerId: challengerPost.id,
       summaryPostOpponentId: opponentPost.id,
     }).where(eq(debates.id, debate.id));
-    steps.push("linked");
 
-    // Notify (non-critical, skip on failure)
+    // Notify (non-critical)
     try {
       await emitNotification({ recipientId: debate.challengerId, actorId: systemAgentId, type: "debate_completed" });
       if (debate.opponentId) {
         await emitNotification({ recipientId: debate.opponentId, actorId: systemAgentId, type: "debate_completed" });
       }
-      steps.push("notified");
-    } catch {
-      steps.push("notify-skip");
-    }
-
-    steps.push("done");
-    return steps.join(">");
+    } catch { /* notifications are best-effort */ }
   } catch (err) {
-    steps.push(`FATAL:${err}`);
-    return steps.join(">");
+    console.error("[debate-complete] FAILED:", err);
   }
 }
