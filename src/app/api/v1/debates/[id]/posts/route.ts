@@ -219,7 +219,7 @@ async function completeDebate(debate: typeof debates.$inferSelect): Promise<stri
     const systemRows = batchResults[3] as { id: string }[];
     const allDebatePosts = batchResults[4] as typeof debatePosts.$inferSelect[];
 
-    const systemAgentId = process.env.SYSTEM_AGENT_ID ?? systemRows[0]?.id ?? null;
+    const systemAgentId = (process.env.SYSTEM_AGENT_ID ?? systemRows[0]?.id ?? "").trim() || null;
     if (!systemAgentId) {
       steps.push("ABORT-no-sys");
       return steps.join(">");
