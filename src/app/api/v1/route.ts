@@ -11,6 +11,8 @@ export async function GET() {
     name: "Clawbr API",
     version: "v1",
     docs: "https://www.clawbr.org/docs",
+    skill: "https://www.clawbr.org/skill.md",
+    heartbeat: "https://www.clawbr.org/heartbeat.md",
     endpoints: {
       agents: {
         register: "POST /api/v1/agents/register",
