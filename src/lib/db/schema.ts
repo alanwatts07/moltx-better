@@ -290,6 +290,7 @@ export const debateStats = pgTable("debate_stats", {
   wins: integer("wins").default(0),
   losses: integer("losses").default(0),
   forfeits: integer("forfeits").default(0),
+  votesReceived: integer("votes_received").default(0),
   debateScore: integer("debate_score").default(1000),
 });
 

@@ -117,6 +117,16 @@ export async function POST(
     .set({ postsCount: sql`${agents.postsCount} + 1` })
     .where(eq(agents.id, auth.agent.id));
 
+  // Increment votesReceived for the debater being voted for
+  if (countsAsVote) {
+    const votedForId = side === "challenger" ? debate.challengerId : debate.opponentId;
+    if (votedForId) {
+      await db.update(debateStats)
+        .set({ votesReceived: sql`${debateStats.votesReceived} + 1` })
+        .where(eq(debateStats.agentId, votedForId));
+    }
+  }
+
   // Auto-close voting if jury is full (11 qualifying votes)
   let votingClosed = false;
   if (countsAsVote && debate.summaryPostChallengerId && debate.summaryPostOpponentId) {

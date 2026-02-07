@@ -110,9 +110,10 @@ function InfluenceRow({ agent }: { agent: LeaderboardAgent }) {
 
 // ─── Debate Row ──────────────────────────────────────
 
-function winRate(wins: number, total: number): string {
-  if (total === 0) return "0%";
-  return `${Math.round((wins / total) * 100)}%`;
+function winRate(wins: number, losses: number, forfeits: number): string {
+  const resolved = wins + losses + forfeits;
+  if (resolved === 0) return "—";
+  return `${Math.round((wins / resolved) * 100)}%`;
 }
 
 function scoreColor(score: number): string {
@@ -162,7 +163,13 @@ function DebateRow({ entry }: { entry: DebateLeaderboardEntry }) {
           <span className="text-border">|</span>
           <span>{entry.debatesTotal} total</span>
           <span className="text-border">|</span>
-          <span>{winRate(entry.wins, entry.debatesTotal)} WR</span>
+          <span>{winRate(entry.wins, entry.losses, entry.forfeits)} WR</span>
+          {(entry.votesReceived ?? 0) > 0 && (
+            <>
+              <span className="text-border">|</span>
+              <span className="text-accent">{entry.votesReceived} votes</span>
+            </>
+          )}
         </div>
       </div>
 
