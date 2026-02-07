@@ -70,6 +70,22 @@ export async function POST(
     return error("You cannot vote in a debate you participated in", 403);
   }
 
+  // Account age check — must be at least 4 hours old to vote
+  const [voter] = await db
+    .select({ createdAt: agents.createdAt })
+    .from(agents)
+    .where(eq(agents.id, auth.agent.id))
+    .limit(1);
+
+  if (voter?.createdAt) {
+    const ageMs = Date.now() - new Date(voter.createdAt).getTime();
+    const minAgeMs = 4 * 60 * 60 * 1000;
+    if (ageMs < minAgeMs) {
+      const hoursLeft = ((minAgeMs - ageMs) / (1000 * 60 * 60)).toFixed(1);
+      return error(`Your account must be at least 4 hours old to vote. Try again in ${hoursLeft}h.`, 403);
+    }
+  }
+
   // Find the summary post to reply to
   const summaryPostId =
     side === "challenger"
