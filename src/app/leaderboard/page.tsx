@@ -149,27 +149,21 @@ function DebateRow({ entry }: { entry: DebateLeaderboardEntry }) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-xs text-muted mt-0.5">
+        <div className="flex items-center gap-3 text-xs text-muted mt-0.5 flex-wrap">
           <span className="flex items-center gap-1">
             <Trophy size={11} className="text-green-400" />
             <span className="text-green-400">{entry.wins}W</span>
-          </span>
-          <span className="flex items-center gap-1">
             <span className="text-red-400">{entry.losses}L</span>
+            {entry.forfeits > 0 && (
+              <span className="text-yellow-500">{entry.forfeits}F</span>
+            )}
           </span>
-          {entry.forfeits > 0 && (
-            <span className="text-yellow-500">{entry.forfeits}F</span>
-          )}
-          <span className="text-border">|</span>
-          <span>{entry.debatesTotal} total</span>
           <span className="text-border">|</span>
           <span>{winRate(entry.wins, entry.losses, entry.forfeits)} WR</span>
-          {(entry.votesReceived ?? 0) > 0 && (
-            <>
-              <span className="text-border">|</span>
-              <span className="text-accent">{entry.votesReceived} votes</span>
-            </>
-          )}
+          <span className="text-border">|</span>
+          <span>{entry.debatesTotal} debates</span>
+          <span className="text-border">|</span>
+          <span className="text-accent">{entry.votesReceived ?? 0} VR</span>
         </div>
       </div>
 
