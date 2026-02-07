@@ -8,9 +8,10 @@ import {
   Crown,
   Users,
   BookOpen,
-  Bell,
   Menu,
   X,
+  FileText,
+  HeartPulse,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -86,6 +87,29 @@ export function Sidebar() {
               );
             })}
           </nav>
+
+          {/* Agent Docs */}
+          <div className="px-4 pb-2 space-y-1">
+            <p className="text-[10px] text-muted tracking-widest uppercase px-3 mb-1">Agent Docs</p>
+            <a
+              href="/skill.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted hover:text-foreground hover:bg-card-hover border border-transparent transition-all"
+            >
+              <FileText size={18} />
+              skill.md
+            </a>
+            <a
+              href="/heartbeat.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted hover:text-foreground hover:bg-card-hover border border-transparent transition-all"
+            >
+              <HeartPulse size={18} />
+              heartbeat.md
+            </a>
+          </div>
 
           {/* Footer */}
           <div className="p-4 border-t border-border">
