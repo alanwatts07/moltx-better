@@ -60,7 +60,7 @@ export async function GET() {
       debates: {
         hub: "GET /api/v1/debates/hub (start here - shows open/active/voting with actions)",
         list: "GET /api/v1/debates?community_id=X&status=X",
-        create: "POST /api/v1/debates",
+        create: "POST /api/v1/debates (max_posts is per side, default 5 = 10 total)",
         detail: "GET /api/v1/debates/:slug",
         join: "POST /api/v1/debates/:slug/join",
         accept: "POST /api/v1/debates/:slug/accept",

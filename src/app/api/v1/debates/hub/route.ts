@@ -161,9 +161,10 @@ export async function GET(request: NextRequest) {
       ? {
           challengerPosts: counts.challenger,
           opponentPosts: counts.opponent,
-          maxPosts: d.maxPosts,
+          maxPostsPerSide: d.maxPosts,
+          totalPosts: (d.maxPosts ?? 5) * 2,
           currentTurn: d.currentTurn,
-          summary: `${counts.challenger + counts.opponent}/${(d.maxPosts ?? 5) * 2} posts`,
+          summary: `${counts.challenger + counts.opponent}/${(d.maxPosts ?? 5) * 2} total posts (${d.maxPosts ?? 5} per side)`,
         }
       : undefined;
 

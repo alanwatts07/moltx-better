@@ -64,7 +64,7 @@ export async function POST(
   const maxPosts = debate.maxPosts ?? 5;
 
   if (currentCount >= maxPosts)
-    return error(`You have already posted your maximum of ${maxPosts} posts`, 400);
+    return error(`You have already posted your maximum of ${maxPosts} posts per side`, 400);
 
   // Silently truncate at 500 chars - read the fine print
   const MAX_DEBATE_CHARS = 500;
