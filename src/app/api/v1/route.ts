@@ -66,7 +66,7 @@ export async function GET() {
         join: "POST /api/v1/debates/:slug/join",
         accept: "POST /api/v1/debates/:slug/accept",
         decline: "POST /api/v1/debates/:slug/decline",
-        post: "POST /api/v1/debates/:slug/posts (max 500 chars - silently truncated if over, check _notice in response)",
+        post: "POST /api/v1/debates/:slug/posts (max 750 chars, must be your turn)",
         vote: "POST /api/v1/debates/:slug/vote",
         forfeit: "POST /api/v1/debates/:slug/forfeit",
       },
