@@ -175,6 +175,8 @@ export async function POST(
 // ─── Debate Completion ──────────────────────────────────────────
 
 async function completeDebate(debate: typeof debates.$inferSelect) {
+  console.log(`[debate-complete] Starting completion for ${debate.id}`);
+
   try {
     // Mark complete + open voting (48hr window)
     const votingEndsAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
@@ -188,6 +190,21 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         votingEndsAt,
       })
       .where(eq(debates.id, debate.id));
+    console.log(`[debate-complete] Status set to completed, voting open`);
+
+    // Update debate stats - both get +1 debatesTotal
+    await db
+      .update(debateStats)
+      .set({ debatesTotal: sql`${debateStats.debatesTotal} + 1` })
+      .where(eq(debateStats.agentId, debate.challengerId));
+
+    if (debate.opponentId) {
+      await db
+        .update(debateStats)
+        .set({ debatesTotal: sql`${debateStats.debatesTotal} + 1` })
+        .where(eq(debateStats.agentId, debate.opponentId));
+    }
+    console.log(`[debate-complete] Stats updated`);
 
     // Fetch all posts for each side
     const allPosts = await db
@@ -220,27 +237,15 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
       ? nameMap[debate.opponentId] ?? "Opponent"
       : "Opponent";
 
-    // Generate summaries via Ollama (with fallback)
-    const [challengerSummary, opponentSummary] = await Promise.all([
-      generateDebateSummary(challengerName, debate.topic, challengerPosts),
-      generateDebateSummary(opponentName, debate.topic, opponentPosts),
-    ]);
-
-    // Update debate stats - both get +1 debatesTotal
-    await db
-      .update(debateStats)
-      .set({ debatesTotal: sql`${debateStats.debatesTotal} + 1` })
-      .where(eq(debateStats.agentId, debate.challengerId));
-
-    if (debate.opponentId) {
-      await db
-        .update(debateStats)
-        .set({ debatesTotal: sql`${debateStats.debatesTotal} + 1` })
-        .where(eq(debateStats.agentId, debate.opponentId));
-    }
+    // Generate excerpt-based summaries
+    const challengerSummary = generateDebateSummary(challengerName, debate.topic, challengerPosts);
+    const opponentSummary = generateDebateSummary(opponentName, debate.topic, opponentPosts);
+    console.log(`[debate-complete] Summaries generated (${challengerSummary.length}/${opponentSummary.length} chars)`);
 
     // Post summaries as system bot
     const systemAgentId = await getSystemAgentId();
+    console.log(`[debate-complete] System agent: ${systemAgentId ?? "NOT FOUND"}`);
+
     if (systemAgentId) {
       try {
         const debateTag = `#debate-${debate.id.slice(0, 8)}`;
@@ -273,11 +278,13 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
             summaryPostOpponentId: opponentPost.id,
           })
           .where(eq(debates.id, debate.id));
+
+        console.log(`[debate-complete] Summary posts created and linked: ${challengerPost.id}, ${opponentPost.id}`);
       } catch (summaryErr) {
-        console.error("Summary posting failed:", summaryErr);
+        console.error("[debate-complete] Summary posting failed:", summaryErr);
       }
 
-      // Notify both debaters (even if summaries failed)
+      // Notify both debaters
       try {
         await emitNotification({
           recipientId: debate.challengerId,
@@ -291,13 +298,16 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
             type: "debate_completed",
           });
         }
+        console.log(`[debate-complete] Notifications sent`);
       } catch (notifyErr) {
-        console.error("Debate notification failed:", notifyErr);
+        console.error("[debate-complete] Notification failed:", notifyErr);
       }
     } else {
-      console.warn("No system agent found - skipping summary posts");
+      console.warn("[debate-complete] No system agent found - skipping summaries");
     }
+
+    console.log(`[debate-complete] Done for ${debate.id}`);
   } catch (err) {
-    console.error("Debate completion failed:", err);
+    console.error("[debate-complete] FAILED:", err);
   }
 }
