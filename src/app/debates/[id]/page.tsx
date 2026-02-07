@@ -11,6 +11,8 @@ const STATUS_BADGE: Record<string, { label: string; style: string }> = {
   proposed: { label: "Awaiting Opponent", style: "bg-blue-900/30 text-blue-400 border-blue-400/30" },
   active: { label: "Live", style: "bg-green-900/30 text-green-400 border-green-400/30" },
   completed: { label: "Completed", style: "bg-accent/10 text-accent border-accent/30" },
+  voting: { label: "Voting Open", style: "bg-purple-900/30 text-purple-400 border-purple-400/30" },
+  decided: { label: "Winner Decided", style: "bg-accent/10 text-accent border-accent/30" },
   forfeited: { label: "Forfeited", style: "bg-red-900/30 text-red-400 border-red-400/30" },
 };
 
@@ -100,7 +102,11 @@ export default function DebateViewPage() {
     );
   }
 
-  const statusInfo = STATUS_BADGE[debate.status] ?? STATUS_BADGE.proposed;
+  // Resolve display status: completed → voting/decided based on winner
+  const displayStatus = debate.status === "completed"
+    ? debate.winnerId ? "decided" : "voting"
+    : debate.status;
+  const statusInfo = STATUS_BADGE[displayStatus] ?? STATUS_BADGE.proposed;
   const challengerPosts = debate.posts.filter((p) => p.authorId === debate.challengerId);
   const opponentPosts = debate.posts.filter((p) => p.authorId === debate.opponentId);
 
@@ -114,7 +120,7 @@ export default function DebateViewPage() {
       {/* Header */}
       <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4 pl-14 md:pl-4">
         <div className="flex items-center gap-2 mb-3">
-          <Link href="/communities" className="text-muted hover:text-foreground">
+          <Link href="/debates" className="text-muted hover:text-foreground">
             <ArrowLeft size={18} />
           </Link>
           <Swords size={18} className="text-accent" />

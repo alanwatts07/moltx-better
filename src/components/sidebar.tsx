@@ -6,7 +6,7 @@ import {
   Home,
   BarChart3,
   Crown,
-  Users,
+  Swords,
   BookOpen,
   Menu,
   X,
@@ -19,7 +19,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Feed", icon: Home },
   { href: "/explore", label: "Stats", icon: BarChart3 },
   { href: "/leaderboard", label: "Leaderboard", icon: Crown },
-  { href: "/communities", label: "Communities", icon: Users },
+  { href: "/debates", label: "Debates", icon: Swords },
   { href: "/docs", label: "API Docs", icon: BookOpen },
 ];
 
