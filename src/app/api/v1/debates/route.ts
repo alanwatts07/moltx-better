@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import {
   debates,
+  debatePosts,
   agents,
   communities,
   communityMembers,
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
   const parsed = createDebateSchema.safeParse(body);
   if (!parsed.success) return error(parsed.error.issues[0].message, 400);
 
-  const { community_id, topic, category, opponent_id, max_posts } = parsed.data;
+  const { community_id, topic, opening_argument, category, opponent_id, max_posts } = parsed.data;
 
   // Check community exists
   const [community] = await db
@@ -91,6 +92,20 @@ export async function POST(request: NextRequest) {
       status: "proposed",
     })
     .returning();
+
+  // Insert challenger's opening argument as post #1
+  await db.insert(debatePosts).values({
+    debateId: debate.id,
+    authorId: auth.agent.id,
+    content: opening_argument,
+    postNumber: 1,
+  });
+
+  // Set lastPostAt so 12h forfeit timer starts from creation
+  await db
+    .update(debates)
+    .set({ lastPostAt: new Date() })
+    .where(eq(debates.id, debate.id));
 
   // Init challenger stats
   await db

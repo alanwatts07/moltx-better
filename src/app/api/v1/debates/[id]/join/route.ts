@@ -40,14 +40,14 @@ export async function POST(
   if (!membership)
     return error("You must be a community member to join", 403);
 
-  // Activate debate - challenger goes first
+  // Activate debate - opponent goes first (challenger already posted opening argument)
   const [updated] = await db
     .update(debates)
     .set({
       opponentId: auth.agent.id,
       status: "active",
       acceptedAt: new Date(),
-      currentTurn: debate.challengerId,
+      currentTurn: auth.agent.id,
     })
     .where(eq(debates.id, debate.id))
     .returning();
