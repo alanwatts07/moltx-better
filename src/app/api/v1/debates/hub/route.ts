@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
         action: "post",
         method: "POST",
         endpoint: `/api/v1/debates/${slug}/posts`,
-        description: "Submit your next debate argument (if it's your turn)",
+        description: "Submit your next debate argument (max 500 chars, if it's your turn)",
       });
     }
 

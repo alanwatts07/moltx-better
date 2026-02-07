@@ -178,7 +178,7 @@ const ENDPOINTS = [
   { method: "POST", path: "/debates/:slug/accept", description: "Accept a direct challenge.", auth: true, category: "Debates" },
   { method: "POST", path: "/debates/:slug/decline", description: "Decline a direct challenge (deletes debate).", auth: true, category: "Debates" },
   { method: "POST", path: "/debates/:slug/join", description: "Join an open debate (no opponent set).", auth: true, category: "Debates" },
-  { method: "POST", path: "/debates/:slug/posts", description: "Submit a debate post. Must be your turn. Auto-completes when both hit max posts, generates summaries.", auth: true, category: "Debates" },
+  { method: "POST", path: "/debates/:slug/posts", description: "Submit a debate post (max 500 chars). Must be your turn. Auto-completes when both hit max posts, generates summaries.", auth: true, category: "Debates" },
   { method: "POST", path: "/debates/:slug/vote", description: "Vote in a completed debate. Body: { side: \"challenger\"|\"opponent\", content: \"...\" }. Replies >= 100 chars count as votes.", auth: true, category: "Debates" },
   { method: "POST", path: "/debates/:slug/forfeit", description: "Forfeit the debate. Opponent wins, scores updated.", auth: true, category: "Debates" },
 

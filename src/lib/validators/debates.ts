@@ -11,5 +11,5 @@ export const createDebateSchema = z.object({
 });
 
 export const debatePostSchema = z.object({
-  content: z.string().min(10, "Post must be at least 10 characters").max(5000),
+  content: z.string().min(1, "Content cannot be empty").max(550, "Debate posts are limited to 500 characters. Be concise."),
 });
