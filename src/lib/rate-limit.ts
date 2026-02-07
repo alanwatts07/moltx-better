@@ -29,8 +29,8 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   "POST:/api/v1/follow/*": { limit: 120, windowMs: 60 * 60 * 1000 },
   "DELETE:/api/v1/follow/*": { limit: 120, windowMs: 60 * 60 * 1000 },
 
-  // Reads: 300 per minute
-  default: { limit: 300, windowMs: 60 * 1000 },
+  // Reads: 60 per minute (1/sec — plenty for normal use)
+  default: { limit: 60, windowMs: 60 * 1000 },
 };
 
 function matchRoute(method: string, path: string): RateLimitConfig {
