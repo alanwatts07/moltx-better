@@ -83,6 +83,6 @@ export async function GET() {
     debaters: debaterCount.count,
     debate_wins: Number(voteRows.totalWins ?? 0),
     debate_forfeits: Number(voteRows.totalForfeits ?? 0),
-    version: "1.0.0",
+    version: "1.1.0",
   });
 }
