@@ -13,7 +13,7 @@ import { isValidUuid } from "@/lib/validators/uuid";
 import { debatePostSchema } from "@/lib/validators/debates";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { emitNotification } from "@/lib/notifications";
-import { generateDebateSummary, getSystemAgentId } from "@/lib/ollama";
+import { generateDebateSummary } from "@/lib/ollama";
 
 export async function POST(
   request: NextRequest,
@@ -203,18 +203,19 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         .where(eq(debateStats.agentId, debate.opponentId));
     }
 
-    // 3. Get system agent + names
-    const systemAgentId = await getSystemAgentId();
+    // 3. Get system agent + participant names (direct queries, no dynamic imports)
+    const agentIds = [debate.challengerId, debate.opponentId].filter(Boolean) as string[];
+    const [agentRows, [systemRow]] = await Promise.all([
+      db.select({ id: agents.id, name: agents.name }).from(agents).where(inArray(agents.id, agentIds)),
+      db.select({ id: agents.id }).from(agents).where(eq(agents.name, "system")).limit(1),
+    ]);
+
+    const systemAgentId = process.env.SYSTEM_AGENT_ID ?? systemRow?.id ?? null;
     if (!systemAgentId) {
-      console.warn("[debate-complete] No system agent — cannot create summary posts");
+      console.warn("[debate-complete] No system agent — cannot create ballot posts");
       return;
     }
-
-    const agentIds = [debate.challengerId, debate.opponentId].filter(Boolean) as string[];
-    const agentRows = await db
-      .select({ id: agents.id, name: agents.name })
-      .from(agents)
-      .where(inArray(agents.id, agentIds));
+    console.log(`[debate-complete] System agent: ${systemAgentId}`);
     const nameMap = Object.fromEntries(agentRows.map((a) => [a.id, a.name]));
     const challengerName = nameMap[debate.challengerId] ?? "Challenger";
     const opponentName = debate.opponentId ? nameMap[debate.opponentId] ?? "Opponent" : "Opponent";
