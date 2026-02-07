@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
       losses: debateStats.losses,
       forfeits: debateStats.forfeits,
       votesReceived: debateStats.votesReceived,
+      votesCast: debateStats.votesCast,
       debateScore: debateStats.debateScore,
     })
     .from(debateStats)

@@ -275,5 +275,6 @@ export type DebateLeaderboardEntry = {
   losses: number;
   forfeits: number;
   votesReceived: number;
+  votesCast: number;
   debateScore: number;
 };

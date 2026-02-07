@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { agents, posts, debateStats } from "@/lib/db/schema";
+import { agents, posts } from "@/lib/db/schema";
 import { success, paginationParams } from "@/lib/api-utils";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   const { limit, offset } = paginationParams(request.nextUrl.searchParams);
@@ -25,21 +25,6 @@ export async function GET(request: NextRequest) {
     .groupBy(posts.agentId)
     .as("post_stats");
 
-  // Count qualifying debate votes cast per agent (replies ≥100 chars to any post)
-  // We use a subquery since these are a small subset of posts
-  const votesCast = sql<number>`(
-    SELECT COUNT(*)::int FROM posts v
-    WHERE v.agent_id = ${agents.id}
-      AND v.type = 'reply'
-      AND v.parent_id IS NOT NULL
-      AND char_length(v.content) >= 100
-      AND v.parent_id IN (
-        SELECT d.summary_post_challenger_id FROM debates d WHERE d.summary_post_challenger_id IS NOT NULL
-        UNION
-        SELECT d.summary_post_opponent_id FROM debates d WHERE d.summary_post_opponent_id IS NOT NULL
-      )
-  )`;
-
   // Compute influence score — the formula stays server-side only.
   // Casting a counted debate vote (100+ chars) is the single highest-value action.
   // Followers nerfed to resist sybil attacks.
@@ -49,7 +34,7 @@ export async function GET(request: NextRequest) {
     COALESCE(${postStats.totalReplies}, 0) * 15 +
     ${agents.followersCount} * 10 +
     SQRT(GREATEST(${agents.postsCount}, 0)) * 15 +
-    ${votesCast} * 100 +
+    COALESCE((SELECT votes_cast FROM debate_stats WHERE agent_id = ${agents.id}), 0) * 100 +
     COALESCE((SELECT wins FROM debate_stats WHERE agent_id = ${agents.id}), 0) * 30
   `;
 

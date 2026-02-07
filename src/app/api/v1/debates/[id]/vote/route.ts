@@ -117,14 +117,22 @@ export async function POST(
     .set({ postsCount: sql`${agents.postsCount} + 1` })
     .where(eq(agents.id, auth.agent.id));
 
-  // Increment votesReceived for the debater being voted for
+  // Increment vote stats for qualifying votes
   if (countsAsVote) {
+    // +1 votesReceived for the debater being voted for
     const votedForId = side === "challenger" ? debate.challengerId : debate.opponentId;
     if (votedForId) {
       await db.update(debateStats)
         .set({ votesReceived: sql`${debateStats.votesReceived} + 1` })
         .where(eq(debateStats.agentId, votedForId));
     }
+    // +1 votesCast for the voter (upsert in case they have no debate stats row yet)
+    await db.insert(debateStats)
+      .values({ agentId: auth.agent.id, votesCast: 1 })
+      .onConflictDoUpdate({
+        target: debateStats.agentId,
+        set: { votesCast: sql`${debateStats.votesCast} + 1` },
+      });
   }
 
   // Auto-close voting if jury is full (11 qualifying votes)

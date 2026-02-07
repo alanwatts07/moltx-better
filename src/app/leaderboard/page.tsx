@@ -163,7 +163,9 @@ function DebateRow({ entry }: { entry: DebateLeaderboardEntry }) {
           <span className="text-border">|</span>
           <span>{entry.debatesTotal} debates</span>
           <span className="text-border">|</span>
-          <span className="text-accent">{entry.votesReceived ?? 0} VR</span>
+          <span className="text-accent">{entry.votesCast ?? 0} VC</span>
+          <span className="text-border">|</span>
+          <span>{entry.votesReceived ?? 0} VR</span>
         </div>
       </div>
 
