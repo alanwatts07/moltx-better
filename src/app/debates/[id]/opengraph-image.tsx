@@ -1,6 +1,9 @@
 import { ImageResponse } from "next/og";
+import { db } from "@/lib/db";
+import { debates, agents, posts, debatePosts } from "@/lib/db/schema";
+import { eq, inArray, and, sql } from "drizzle-orm";
+import { isValidUuid } from "@/lib/validators/uuid";
 
-export const runtime = "edge";
 export const alt = "Clawbr Debate";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -9,6 +12,7 @@ const GOLD = "#c9a227";
 const BG = "#06060a";
 const FG = "#e4e2db";
 const MUTED = "rgba(228, 226, 219, 0.4)";
+const MIN_VOTE_LENGTH = 100;
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
   proposed: { bg: "rgba(59,130,246,0.15)", fg: "#60a5fa", label: "OPEN" },
@@ -24,11 +28,6 @@ export default async function DebateOGImage({
 }) {
   const { id } = await params;
 
-  // Fetch debate data from API
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.NEXT_PUBLIC_BASE_URL ?? "https://www.clawbr.org";
-
   let topic = "Debate";
   let challengerName = "Challenger";
   let opponentName = "Opponent";
@@ -36,35 +35,84 @@ export default async function DebateOGImage({
   let challengerVotes = 0;
   let opponentVotes = 0;
   let winnerName: string | null = null;
-  let challengerEmoji = "🤖";
-  let opponentEmoji = "🤖";
+  let challengerEmoji = "\u{1F916}";
+  let opponentEmoji = "\u{1F916}";
   let postCount = 0;
   let maxPosts = 5;
 
   try {
-    const res = await fetch(`${baseUrl}/api/v1/debates/${id}`, {
-      next: { revalidate: 60 },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      topic = data.topic ?? topic;
-      status = data.status ?? status;
-      maxPosts = data.maxPosts ?? maxPosts;
-      postCount = data.posts?.length ?? 0;
-      challengerVotes = data.votes?.challenger ?? 0;
-      opponentVotes = data.votes?.opponent ?? 0;
+    // Query DB directly — no self-referencing fetch
+    const [debate] = isValidUuid(id)
+      ? await db.select().from(debates).where(eq(debates.id, id)).limit(1)
+      : await db.select().from(debates).where(eq(debates.slug, id)).limit(1);
 
-      if (data.challenger) {
-        challengerName = data.challenger.displayName ?? data.challenger.name ?? challengerName;
-        challengerEmoji = data.challenger.avatarEmoji ?? challengerEmoji;
+    if (debate) {
+      topic = debate.topic;
+      status = debate.status;
+      maxPosts = debate.maxPosts ?? 5;
+
+      // Fetch agents
+      const agentIds = [debate.challengerId, debate.opponentId].filter(Boolean) as string[];
+      const agentRows = agentIds.length > 0
+        ? await db
+            .select({
+              id: agents.id,
+              name: agents.name,
+              displayName: agents.displayName,
+              avatarEmoji: agents.avatarEmoji,
+            })
+            .from(agents)
+            .where(inArray(agents.id, agentIds))
+        : [];
+
+      const agentMap = Object.fromEntries(agentRows.map((a) => [a.id, a]));
+      const challenger = agentMap[debate.challengerId];
+      const opponent = debate.opponentId ? agentMap[debate.opponentId] : null;
+
+      if (challenger) {
+        challengerName = challenger.displayName ?? challenger.name;
+        challengerEmoji = challenger.avatarEmoji ?? "\u{1F916}";
       }
-      if (data.opponent) {
-        opponentName = data.opponent.displayName ?? data.opponent.name ?? opponentName;
-        opponentEmoji = data.opponent.avatarEmoji ?? opponentEmoji;
+      if (opponent) {
+        opponentName = opponent.displayName ?? opponent.name;
+        opponentEmoji = opponent.avatarEmoji ?? "\u{1F916}";
       }
 
-      if (data.winnerId) {
-        winnerName = data.winnerId === data.challengerId ? challengerName : opponentName;
+      // Post count
+      const [pc] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(debatePosts)
+        .where(eq(debatePosts.debateId, debate.id));
+      postCount = pc?.count ?? 0;
+
+      // Vote counts
+      if (debate.summaryPostChallengerId) {
+        const [cv] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(posts)
+          .where(
+            and(
+              eq(posts.parentId, debate.summaryPostChallengerId),
+              sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`
+            )
+          );
+        challengerVotes = cv?.count ?? 0;
+      }
+      if (debate.summaryPostOpponentId) {
+        const [ov] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(posts)
+          .where(
+            and(
+              eq(posts.parentId, debate.summaryPostOpponentId),
+              sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`
+            )
+          );
+        opponentVotes = ov?.count ?? 0;
+      }
+
+      if (debate.winnerId) {
+        winnerName = debate.winnerId === debate.challengerId ? challengerName : opponentName;
       }
     }
   } catch {
@@ -72,9 +120,8 @@ export default async function DebateOGImage({
   }
 
   const statusInfo = STATUS_COLORS[status] ?? STATUS_COLORS.proposed;
-
-  // Truncate topic if too long
   const displayTopic = topic.length > 80 ? topic.slice(0, 77) + "..." : topic;
+  const showVotes = status === "completed" || status === "forfeited";
 
   return new ImageResponse(
     (
@@ -84,9 +131,8 @@ export default async function DebateOGImage({
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          background: `linear-gradient(135deg, ${BG} 0%, #0c0c12 50%, ${BG} 100%)`,
+          backgroundColor: BG,
           position: "relative",
-          overflow: "hidden",
           padding: "48px 56px",
         }}
       >
@@ -99,6 +145,7 @@ export default async function DebateOGImage({
             right: 0,
             height: 4,
             background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)`,
+            display: "flex",
           }}
         />
 
@@ -111,28 +158,29 @@ export default async function DebateOGImage({
             marginBottom: 32,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center" }}>
             <div
               style={{
                 width: 40,
                 height: 40,
                 borderRadius: 8,
-                background: `rgba(201, 162, 39, 0.1)`,
-                border: `2px solid rgba(201, 162, 39, 0.3)`,
+                background: "rgba(201, 162, 39, 0.1)",
+                border: "2px solid rgba(201, 162, 39, 0.3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: GOLD,
                 fontSize: 24,
                 fontWeight: 700,
+                marginRight: 12,
               }}
             >
               C
             </div>
-            <div style={{ display: "flex", fontSize: 28, fontWeight: 700, color: FG }}>
-              Claw<span style={{ color: GOLD }}>br</span>
+            <div style={{ display: "flex", fontSize: 28, fontWeight: 700, color: FG, marginRight: 8 }}>
+              Clawbr
             </div>
-            <div style={{ fontSize: 13, color: MUTED, marginLeft: 8 }}>DEBATE</div>
+            <div style={{ fontSize: 13, color: MUTED, display: "flex" }}>DEBATE</div>
           </div>
 
           {/* Status badge */}
@@ -162,6 +210,7 @@ export default async function DebateOGImage({
             lineHeight: 1.3,
             marginBottom: 40,
             maxWidth: 900,
+            display: "flex",
           }}
         >
           {displayTopic}
@@ -173,8 +222,7 @@ export default async function DebateOGImage({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: 48,
-            flex: 1,
+            flexGrow: 1,
           }}
         >
           {/* Challenger */}
@@ -183,8 +231,8 @@ export default async function DebateOGImage({
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 8,
               minWidth: 200,
+              marginRight: 48,
             }}
           >
             <div
@@ -200,18 +248,23 @@ export default async function DebateOGImage({
                 alignItems: "center",
                 justifyContent: "center",
                 fontSize: 40,
+                marginBottom: 8,
               }}
             >
               {challengerEmoji}
             </div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: FG }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: FG, marginBottom: 4, display: "flex" }}>
               {challengerName}
             </div>
-            <div style={{ fontSize: 13, color: MUTED }}>Challenger</div>
-            {(status === "completed" || status === "forfeited") && (
-              <div style={{ fontSize: 18, fontWeight: 700, color: GOLD }}>
+            <div style={{ fontSize: 13, color: MUTED, marginBottom: 4, display: "flex" }}>
+              Challenger
+            </div>
+            {showVotes ? (
+              <div style={{ fontSize: 18, fontWeight: 700, color: GOLD, display: "flex" }}>
                 {challengerVotes} votes
               </div>
+            ) : (
+              <div style={{ display: "flex", height: 22 }} />
             )}
           </div>
 
@@ -221,7 +274,7 @@ export default async function DebateOGImage({
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 4,
+              marginRight: 48,
             }}
           >
             <div
@@ -230,11 +283,13 @@ export default async function DebateOGImage({
                 fontWeight: 700,
                 color: GOLD,
                 letterSpacing: 4,
+                marginBottom: 4,
+                display: "flex",
               }}
             >
               VS
             </div>
-            <div style={{ fontSize: 12, color: MUTED }}>
+            <div style={{ fontSize: 12, color: MUTED, display: "flex" }}>
               {postCount} / {maxPosts * 2} posts
             </div>
           </div>
@@ -245,7 +300,6 @@ export default async function DebateOGImage({
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: 8,
               minWidth: 200,
             }}
           >
@@ -262,42 +316,47 @@ export default async function DebateOGImage({
                 alignItems: "center",
                 justifyContent: "center",
                 fontSize: 40,
+                marginBottom: 8,
               }}
             >
               {opponentEmoji}
             </div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: FG }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: FG, marginBottom: 4, display: "flex" }}>
               {opponentName}
             </div>
-            <div style={{ fontSize: 13, color: MUTED }}>Opponent</div>
-            {(status === "completed" || status === "forfeited") && (
-              <div style={{ fontSize: 18, fontWeight: 700, color: GOLD }}>
+            <div style={{ fontSize: 13, color: MUTED, marginBottom: 4, display: "flex" }}>
+              Opponent
+            </div>
+            {showVotes ? (
+              <div style={{ fontSize: 18, fontWeight: 700, color: GOLD, display: "flex" }}>
                 {opponentVotes} votes
               </div>
+            ) : (
+              <div style={{ display: "flex", height: 22 }} />
             )}
           </div>
         </div>
 
         {/* Winner banner */}
-        {winnerName && (
+        {winnerName ? (
           <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: 10,
               padding: "10px 24px",
               borderRadius: 10,
-              background: `rgba(201, 162, 39, 0.1)`,
-              border: `1px solid rgba(201, 162, 39, 0.3)`,
+              background: "rgba(201, 162, 39, 0.1)",
+              border: "1px solid rgba(201, 162, 39, 0.3)",
               marginTop: 16,
             }}
           >
-            <div style={{ fontSize: 22, color: GOLD, fontWeight: 700 }}>
-              🏆 {winnerName} wins
-              {status === "forfeited" ? " by forfeit" : ""}
+            <div style={{ fontSize: 22, color: GOLD, fontWeight: 700, display: "flex" }}>
+              {"\u{1F3C6}"} {winnerName} wins{status === "forfeited" ? " by forfeit" : ""}
             </div>
           </div>
+        ) : (
+          <div style={{ display: "flex" }} />
         )}
 
         {/* Footer */}
@@ -307,8 +366,9 @@ export default async function DebateOGImage({
             bottom: 24,
             left: 56,
             fontSize: 14,
-            color: `rgba(201, 162, 39, 0.5)`,
+            color: "rgba(201, 162, 39, 0.5)",
             letterSpacing: 2,
+            display: "flex",
           }}
         >
           clawbr.org
