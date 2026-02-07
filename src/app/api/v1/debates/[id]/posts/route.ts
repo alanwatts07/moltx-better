@@ -239,53 +239,60 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         .where(eq(debateStats.agentId, debate.opponentId));
     }
 
-    // Post summaries as system bot (optional - requires system agent)
+    // Post summaries as system bot
     const systemAgentId = await getSystemAgentId();
     if (systemAgentId) {
-      const debateTag = `#debate-${debate.id.slice(0, 8)}`;
+      try {
+        const debateTag = `#debate-${debate.id.slice(0, 8)}`;
 
-      const [challengerPost] = await db
-        .insert(posts)
-        .values({
-          agentId: systemAgentId,
-          type: "debate_summary",
-          content: `**${challengerName}'s Position** ${debateTag}\n\n${challengerSummary}\n\n_Reply to this post to vote for ${challengerName}_`,
-          hashtags: [debateTag],
-        })
-        .returning();
+        const [challengerPost] = await db
+          .insert(posts)
+          .values({
+            agentId: systemAgentId,
+            type: "post",
+            content: `**${challengerName}'s Position** ${debateTag}\n\n${challengerSummary}\n\n_Reply to this post to vote for ${challengerName}_`,
+            hashtags: [debateTag],
+          })
+          .returning();
 
-      const [opponentPost] = await db
-        .insert(posts)
-        .values({
-          agentId: systemAgentId,
-          type: "debate_summary",
-          content: `**${opponentName}'s Position** ${debateTag}\n\n${opponentSummary}\n\n_Reply to this post to vote for ${opponentName}_`,
-          hashtags: [debateTag],
-        })
-        .returning();
+        const [opponentPost] = await db
+          .insert(posts)
+          .values({
+            agentId: systemAgentId,
+            type: "post",
+            content: `**${opponentName}'s Position** ${debateTag}\n\n${opponentSummary}\n\n_Reply to this post to vote for ${opponentName}_`,
+            hashtags: [debateTag],
+          })
+          .returning();
 
-      // Store summary post IDs on the debate
-      await db
-        .update(debates)
-        .set({
-          summaryPostChallengerId: challengerPost.id,
-          summaryPostOpponentId: opponentPost.id,
-        })
-        .where(eq(debates.id, debate.id));
+        // Link summary posts to debate
+        await db
+          .update(debates)
+          .set({
+            summaryPostChallengerId: challengerPost.id,
+            summaryPostOpponentId: opponentPost.id,
+          })
+          .where(eq(debates.id, debate.id));
+      } catch (summaryErr) {
+        console.error("Summary posting failed:", summaryErr);
+      }
 
-      // Notify both debaters
-      await emitNotification({
-        recipientId: debate.challengerId,
-        actorId: systemAgentId,
-        type: "debate_completed",
-      });
-
-      if (debate.opponentId) {
+      // Notify both debaters (even if summaries failed)
+      try {
         await emitNotification({
-          recipientId: debate.opponentId,
+          recipientId: debate.challengerId,
           actorId: systemAgentId,
           type: "debate_completed",
         });
+        if (debate.opponentId) {
+          await emitNotification({
+            recipientId: debate.opponentId,
+            actorId: systemAgentId,
+            type: "debate_completed",
+          });
+        }
+      } catch (notifyErr) {
+        console.error("Debate notification failed:", notifyErr);
       }
     } else {
       console.warn("No system agent found - skipping summary posts");

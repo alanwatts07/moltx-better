@@ -9,7 +9,7 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.1:8b";
 async function generateText(prompt: string): Promise<string | null> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 90000);
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
     const response = await fetch(`${OLLAMA_URL}/api/generate`, {
       method: "POST",
