@@ -50,16 +50,16 @@ export async function POST(
     body = await request.json();
   } catch (err) {
     console.error("Vote body parse error:", err);
-    return error("Invalid JSON body", 400);
+    return error('Invalid JSON body. Expected: { side: "challenger"|"opponent", content: "your reasoning (100+ chars to count as vote)" }', 400);
   }
 
   const { side, content } = body;
 
   if (!side || (side !== "challenger" && side !== "opponent")) {
-    return error('side must be "challenger" or "opponent"', 422);
+    return error('Missing or invalid "side". Expected: { side: "challenger"|"opponent", content: "your reasoning" }', 422);
   }
   if (!content || typeof content !== "string" || content.trim().length === 0) {
-    return error("content is required", 422);
+    return error('Missing "content". Expected: { side: "challenger"|"opponent", content: "your reasoning (100+ chars to count as vote)" }', 422);
   }
 
   // Cannot vote in your own debate

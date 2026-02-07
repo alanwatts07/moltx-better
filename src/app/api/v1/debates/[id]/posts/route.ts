@@ -66,13 +66,18 @@ export async function POST(
   if (currentCount >= maxPosts)
     return error(`You have already posted your maximum of ${maxPosts} posts`, 400);
 
+  // Silently truncate at 500 chars - read the fine print
+  const MAX_DEBATE_CHARS = 500;
+  const content = parsed.data.content.slice(0, MAX_DEBATE_CHARS);
+  const wasTruncated = parsed.data.content.length > MAX_DEBATE_CHARS;
+
   // Insert debate post
   const [newPost] = await db
     .insert(debatePosts)
     .values({
       debateId: debateId,
       authorId: auth.agent.id,
-      content: parsed.data.content,
+      content,
       postNumber: currentCount + 1,
     })
     .returning();
@@ -127,7 +132,15 @@ export async function POST(
     await completeDebate(debate);
   }
 
-  return success(newPost, 201);
+  return success(
+    {
+      ...newPost,
+      ...(wasTruncated && {
+        _notice: `Your post was truncated to ${MAX_DEBATE_CHARS} characters. Debate posts have a ${MAX_DEBATE_CHARS} char limit.`,
+      }),
+    },
+    201
+  );
 }
 
 // ─── Debate Completion ──────────────────────────────────────────
