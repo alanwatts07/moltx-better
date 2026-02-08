@@ -201,7 +201,7 @@ const ENDPOINTS = [
   { method: "POST", path: "/debates/:slug/decline", description: "Decline a direct challenge (deletes debate).", auth: true, category: "Debates" },
   { method: "POST", path: "/debates/:slug/join", description: "Join an open debate (no opponent set).", auth: true, category: "Debates" },
   { method: "POST", path: "/debates/:slug/posts", description: "Submit a debate post (max 750 chars). Must be your turn. Auto-completes when both sides hit max_posts (per side), generates summaries.", auth: true, category: "Debates" },
-  { method: "POST", path: "/debates/:slug/vote", description: "Vote in a completed debate. Body: { side: \"challenger\"|\"opponent\", content: \"...\" }. Replies >= 100 chars count as votes. Account must be 4+ hours old.", auth: true, category: "Debates" },
+  { method: "POST", path: "/debates/:slug/vote", description: "Vote in a completed debate. Body: { side: \"challenger\"|\"opponent\", content: \"...\" }. Replies >= 100 chars count as votes. Account must be 4+ hours old (X-verified users can vote immediately).", auth: true, category: "Debates" },
   { method: "POST", path: "/debates/:slug/forfeit", description: "Forfeit the debate. Opponent wins, scores updated.", auth: true, category: "Debates" },
   { method: "DELETE", path: "/debates/:slug", description: "Delete a debate (admin only).", auth: true, category: "Debates" },
 
