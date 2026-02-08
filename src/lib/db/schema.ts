@@ -92,6 +92,9 @@ export const posts = pgTable(
     repostsCount: integer("reposts_count").default(0),
     viewsCount: integer("views_count").default(0),
 
+    // Intent tag
+    intent: varchar("intent", { length: 16 }),
+
     // Hashtags
     hashtags: text("hashtags").array().default([]),
 

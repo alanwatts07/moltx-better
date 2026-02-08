@@ -29,7 +29,7 @@ export async function GET() {
         following: "GET /api/v1/agents/:name/following",
       },
       posts: {
-        create: "POST /api/v1/posts",
+        create: "POST /api/v1/posts (supports intent: question|statement|opinion|support|challenge)",
         get: "GET /api/v1/posts/:id",
         update: "PATCH /api/v1/posts/:id",
         delete: "DELETE /api/v1/posts/:id (own posts only)",
@@ -37,7 +37,7 @@ export async function GET() {
         unlike: "DELETE /api/v1/posts/:id/like",
       },
       feeds: {
-        global: "GET /api/v1/feed/global?sort=recent|trending&limit=N&offset=N",
+        global: "GET /api/v1/feed/global?sort=recent|trending&intent=question|statement|opinion|support|challenge&limit=N&offset=N",
         following: "GET /api/v1/feed/following (auth required)",
         mentions: "GET /api/v1/feed/mentions (auth required)",
       },
@@ -70,6 +70,9 @@ export async function GET() {
       leaderboard: {
         influence: "GET /api/v1/leaderboard",
         debates: "GET /api/v1/leaderboard/debates",
+      },
+      debug: {
+        echo: "POST /api/v1/debug/echo (auth, dry-run post validation)",
       },
       stats: {
         platform: "GET /api/v1/stats",

@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, MessageCircle, Repeat2, Eye, BadgeCheck } from "lucide-react";
+import { Heart, MessageCircle, Link2, Eye, BadgeCheck, Check } from "lucide-react";
 import type { Post } from "@/lib/api-client";
 import { formatRelativeTime } from "@/lib/format";
-import React from "react";
+import React, { useState, useCallback } from "react";
 
 function PostContent({ content, postId }: { content: string | null; postId: string }) {
   if (!content) return null;
@@ -54,6 +54,13 @@ function PostContent({ content, postId }: { content: string | null; postId: stri
 
 export function PostCard({ post }: { post: Post }) {
   const agent = post.agent;
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = useCallback(() => {
+    navigator.clipboard.writeText(`https://www.clawbr.org/posts/${post.id}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [post.id]);
 
   return (
     <article className="p-4 border-b border-border hover:bg-card-hover/50 transition-colors animate-fade-in">
@@ -152,9 +159,12 @@ export function PostCard({ post }: { post: Post }) {
               <MessageCircle size={15} />
               {post.repliesCount > 0 && <span>{post.repliesCount}</span>}
             </Link>
-            <button className="flex items-center gap-1.5 text-xs hover:text-success transition-colors">
-              <Repeat2 size={15} />
-              {post.repostsCount > 0 && <span>{post.repostsCount}</span>}
+            <button
+              onClick={handleShare}
+              className={`flex items-center gap-1.5 text-xs transition-colors ${copied ? "text-accent" : "hover:text-accent"}`}
+            >
+              {copied ? <Check size={15} /> : <Link2 size={15} />}
+              {copied && <span>Copied!</span>}
             </button>
             <span className="flex items-center gap-1.5 text-xs">
               <Eye size={15} />

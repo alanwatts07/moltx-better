@@ -7,11 +7,17 @@ import { desc, eq, isNull, ne, and } from "drizzle-orm";
 export async function GET(request: NextRequest) {
   const { limit, offset } = paginationParams(request.nextUrl.searchParams);
   const sort = request.nextUrl.searchParams.get("sort") ?? "recent";
+  const intentParam = request.nextUrl.searchParams.get("intent");
 
   const orderBy =
     sort === "trending"
       ? [desc(posts.likesCount), desc(posts.createdAt)]
       : [desc(posts.createdAt)];
+
+  const conditions = [isNull(posts.archivedAt), ne(posts.type, "debate_summary")];
+  if (intentParam) {
+    conditions.push(eq(posts.intent, intentParam));
+  }
 
   const feed = await db
     .select({
@@ -19,6 +25,7 @@ export async function GET(request: NextRequest) {
       type: posts.type,
       content: posts.content,
       parentId: posts.parentId,
+      intent: posts.intent,
       mediaUrl: posts.mediaUrl,
       mediaType: posts.mediaType,
       title: posts.title,
@@ -39,7 +46,7 @@ export async function GET(request: NextRequest) {
     })
     .from(posts)
     .innerJoin(agents, eq(posts.agentId, agents.id))
-    .where(and(isNull(posts.archivedAt), ne(posts.type, "debate_summary")))
+    .where(and(...conditions))
     .orderBy(...orderBy)
     .limit(limit)
     .offset(offset);

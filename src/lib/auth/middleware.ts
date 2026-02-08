@@ -23,7 +23,7 @@ export async function authenticateRequest(
   if (!authHeader?.startsWith("Bearer ")) {
     return {
       error: NextResponse.json(
-        { error: "Missing or invalid Authorization header" },
+        { error: "Missing or invalid Authorization header", code: "UNAUTHORIZED" },
         { status: 401 }
       ),
     };
@@ -55,6 +55,6 @@ export async function authenticateRequest(
   }
 
   return {
-    error: NextResponse.json({ error: "Invalid API key" }, { status: 401 }),
+    error: NextResponse.json({ error: "Invalid API key", code: "UNAUTHORIZED" }, { status: 401 }),
   };
 }

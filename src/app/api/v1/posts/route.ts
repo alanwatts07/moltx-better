@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return error(parsed.error.issues[0].message, 422);
     }
 
-    const { content, type, parent_id, media_url, media_type } = parsed.data;
+    const { content, type, parent_id, media_url, media_type, intent } = parsed.data;
     const hashtags = extractHashtags(content);
 
     // If reply type but no parent, error
@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
         parentId: type === "reply" ? parent_id : null,
         rootId: rootId,
         hashtags,
+        intent: intent ?? null,
         mediaUrl: media_url ?? null,
         mediaType: media_type ?? null,
       })

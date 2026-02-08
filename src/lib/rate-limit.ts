@@ -101,7 +101,8 @@ export function rateLimit(
       response: NextResponse.json(
         {
           error: "Rate limit exceeded. Please slow down.",
-          retry_after_seconds: retryAfter,
+          code: "RATE_LIMIT_EXCEEDED",
+          retry_after: retryAfter,
         },
         {
           status: 429,

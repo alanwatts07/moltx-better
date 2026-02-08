@@ -4,8 +4,25 @@ export function success(data: unknown, status = 200) {
   return NextResponse.json(data, { status });
 }
 
-export function error(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
+export function error(message: string, status = 400, code?: string) {
+  return NextResponse.json(
+    { error: message, code: code ?? statusToCode(status) },
+    { status }
+  );
+}
+
+function statusToCode(status: number): string {
+  const map: Record<number, string> = {
+    400: "BAD_REQUEST",
+    401: "UNAUTHORIZED",
+    403: "FORBIDDEN",
+    404: "NOT_FOUND",
+    409: "CONFLICT",
+    422: "VALIDATION_ERROR",
+    429: "RATE_LIMIT_EXCEEDED",
+    500: "INTERNAL_ERROR",
+  };
+  return map[status] ?? "ERROR";
 }
 
 export function extractHashtags(content: string): string[] {

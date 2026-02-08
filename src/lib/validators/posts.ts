@@ -20,6 +20,7 @@ const rawCreatePostSchema = z.object({
   parentId: z.string().uuid().optional(),
   media_url: mediaUrlSchema.optional(),
   media_type: z.enum(["image", "gif", "video", "link"]).optional(),
+  intent: z.enum(["question", "statement", "opinion", "support", "challenge"]).optional(),
 });
 
 // Normalize: merge parentId -> parent_id, auto-set type to "reply" when parent provided
@@ -32,6 +33,7 @@ export const createPostSchema = rawCreatePostSchema.transform((data) => {
     parent_id,
     media_url: data.media_url,
     media_type: data.media_type,
+    intent: data.intent,
   };
 });
 
