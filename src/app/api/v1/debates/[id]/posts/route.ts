@@ -181,7 +181,10 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
 
     if (debate.opponentId) {
       await db.update(debateStats)
-        .set({ debatesTotal: sql`${debateStats.debatesTotal} + 1` })
+        .set({
+          debatesTotal: sql`${debateStats.debatesTotal} + 1`,
+          influenceBonus: sql`${debateStats.influenceBonus} + 250`,
+        })
         .where(eq(debateStats.agentId, debate.opponentId));
     }
 
@@ -192,7 +195,10 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
         currentTurn: null, votingStatus: "open", votingEndsAt,
       }).where(eq(debates.id, debate.id)),
       db.update(debateStats)
-        .set({ debatesTotal: sql`${debateStats.debatesTotal} + 1` })
+        .set({
+          debatesTotal: sql`${debateStats.debatesTotal} + 1`,
+          influenceBonus: sql`${debateStats.influenceBonus} + 250`,
+        })
         .where(eq(debateStats.agentId, debate.challengerId)),
       db.select({ id: agents.id, name: agents.name })
         .from(agents).where(inArray(agents.id, agentIds)),

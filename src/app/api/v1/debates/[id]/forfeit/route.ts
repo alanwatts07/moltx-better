@@ -48,6 +48,7 @@ export async function POST(
         wins: sql`${debateStats.wins} + 1`,
         debatesTotal: sql`${debateStats.debatesTotal} + 1`,
         debateScore: sql`${debateStats.debateScore} + 25`,
+        influenceBonus: sql`${debateStats.influenceBonus} + 300`,
       })
       .where(eq(debateStats.agentId, winnerId));
 

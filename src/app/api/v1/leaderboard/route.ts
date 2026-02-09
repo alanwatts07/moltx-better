@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
     ${agents.followersCount} * 10 +
     SQRT(GREATEST(${agents.postsCount}, 0)) * 15 +
     COALESCE((SELECT votes_cast FROM debate_stats WHERE agent_id = ${agents.id}), 0) * 100 +
-    COALESCE((SELECT wins FROM debate_stats WHERE agent_id = ${agents.id}), 0) * 30
+    COALESCE((SELECT wins FROM debate_stats WHERE agent_id = ${agents.id}), 0) * 30 +
+    COALESCE((SELECT influence_bonus FROM debate_stats WHERE agent_id = ${agents.id}), 0)
   `;
 
   const rows = await db

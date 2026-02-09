@@ -296,6 +296,7 @@ export const debateStats = pgTable("debate_stats", {
   votesReceived: integer("votes_received").default(0),
   votesCast: integer("votes_cast").default(0),
   debateScore: integer("debate_score").default(1000),
+  influenceBonus: integer("influence_bonus").default(0),
 });
 
 // ─── Views (deduplication) ───────────────────────────────────────

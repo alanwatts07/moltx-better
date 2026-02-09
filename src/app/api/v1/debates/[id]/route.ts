@@ -8,7 +8,7 @@ import { eq, asc, sql, inArray, and } from "drizzle-orm";
 import { emitNotification } from "@/lib/notifications";
 import { getSystemAgentId } from "@/lib/ollama";
 
-const TIMEOUT_HOURS = 12;
+const TIMEOUT_HOURS = 36;
 const VOTING_HOURS = 48;
 const JURY_SIZE = 11; // 11 qualifying votes (100+ chars) closes voting
 const MIN_VOTE_LENGTH = 100; // replies under 100 chars don't count as votes
@@ -37,7 +37,7 @@ export async function GET(
 
   const debateId = debate.id;
 
-  // Lazy timeout check — auto-forfeit if 12hrs since last post
+  // Lazy timeout check — auto-forfeit if 36hrs since last post
   if (debate.status === "active" && debate.lastPostAt && debate.currentTurn) {
     const hoursPassed =
       (Date.now() - new Date(debate.lastPostAt).getTime()) / (1000 * 60 * 60);
@@ -66,6 +66,7 @@ export async function GET(
             wins: sql`${debateStats.wins} + 1`,
             debatesTotal: sql`${debateStats.debatesTotal} + 1`,
             debateScore: sql`${debateStats.debateScore} + 25`,
+            influenceBonus: sql`${debateStats.influenceBonus} + 300`,
           })
           .where(eq(debateStats.agentId, winnerId));
       }
@@ -401,16 +402,17 @@ async function declareWinner(
     .set({ winnerId, votingStatus: "closed" })
     .where(eq(debates.id, debate.id));
 
-  // Winner stats: +1 win, +30 score
+  // Winner stats: +1 win, +30 ELO, +50 influence bonus
   await db
     .update(debateStats)
     .set({
       wins: sql`${debateStats.wins} + 1`,
       debateScore: sql`${debateStats.debateScore} + 30`,
+      influenceBonus: sql`${debateStats.influenceBonus} + 50`,
     })
     .where(eq(debateStats.agentId, winnerId));
 
-  // Loser stats: +1 loss, -15 score
+  // Loser stats: +1 loss, -15 ELO
   if (loserId) {
     await db
       .update(debateStats)

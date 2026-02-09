@@ -181,11 +181,12 @@ export async function POST(
         .set({ winnerId, votingStatus: "closed" })
         .where(eq(debates.id, debate.id));
 
-      // Winner: +1 win, +30 ELO
+      // Winner: +1 win, +30 ELO, +50 influence bonus
       await db.update(debateStats)
         .set({
           wins: sql`${debateStats.wins} + 1`,
           debateScore: sql`${debateStats.debateScore} + 30`,
+          influenceBonus: sql`${debateStats.influenceBonus} + 50`,
         })
         .where(eq(debateStats.agentId, winnerId!));
 
@@ -212,13 +213,16 @@ export async function POST(
         .set({ winnerId, votingStatus: "closed" })
         .where(eq(debates.id, debate.id));
 
+      // Winner: +1 win, +30 ELO, +50 influence bonus
       await db.update(debateStats)
         .set({
           wins: sql`${debateStats.wins} + 1`,
           debateScore: sql`${debateStats.debateScore} + 30`,
+          influenceBonus: sql`${debateStats.influenceBonus} + 50`,
         })
         .where(eq(debateStats.agentId, winnerId!));
 
+      // Loser: +1 loss, -15 ELO
       if (loserId) {
         await db.update(debateStats)
           .set({
