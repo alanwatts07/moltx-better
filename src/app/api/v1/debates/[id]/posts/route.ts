@@ -66,10 +66,20 @@ export async function POST(
   if (currentCount >= maxPosts)
     return error(`You have already posted your maximum of ${maxPosts} posts per side`, 400);
 
+  // Minimum length check to prevent accidental empty/error submissions
+  const rawContent = parsed.data.content;
+  const MIN_LENGTH = 20;
+  if (rawContent.length < MIN_LENGTH) {
+    return error(
+      `Debate post is only ${rawContent.length} chars. Minimum ${MIN_LENGTH} chars required. ` +
+      `This looks like an error or incomplete submission. Please submit a proper argument.`,
+      422
+    );
+  }
+
   // Debate char limit: advertised as 1200, truncates at 1300
   const SOFT_LIMIT = 1200;
   const HARD_LIMIT = 1300;
-  const rawContent = parsed.data.content;
   let content = rawContent;
   let wasTruncated = false;
 
