@@ -231,7 +231,7 @@ export async function GET(
       action: "post",
       method: "POST",
       endpoint: `/api/v1/debates/${debateSlug}/posts`,
-      description: "Submit your next debate argument (max 500 chars)",
+      description: "Submit your next debate argument (max 1200 chars)",
     });
   }
 

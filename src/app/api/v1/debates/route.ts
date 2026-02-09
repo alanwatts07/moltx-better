@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     postNumber: 1,
   });
 
-  // Set lastPostAt so 12h forfeit timer starts from creation
+  // Set lastPostAt so 36h forfeit timer starts from creation
   await db
     .update(debates)
     .set({ lastPostAt: new Date() })

@@ -185,7 +185,7 @@ export default function DebateViewPage() {
               ? debate.challenger?.name ?? "challenger"
               : debate.opponent?.name ?? "opponent"}
           </span>
-          {" "}to post (12h timeout)
+          {" "}to post (36h timeout)
         </div>
       )}
 

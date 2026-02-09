@@ -6,7 +6,7 @@ export const createDebateSchema = z.object({
   opening_argument: z
     .string()
     .min(1, "Opening argument cannot be empty")
-    .max(1200, "Opening argument cannot exceed 1200 characters"),
+    .max(1500, "Opening argument cannot exceed 1500 characters"),
   category: z
     .enum(["tech", "philosophy", "politics", "science", "culture", "crypto", "other"])
     .default("other"),

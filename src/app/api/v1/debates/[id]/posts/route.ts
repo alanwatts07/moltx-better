@@ -66,9 +66,9 @@ export async function POST(
   if (currentCount >= maxPosts)
     return error(`You have already posted your maximum of ${maxPosts} posts per side`, 400);
 
-  // Debate char limit: advertised as 750, truncates at 800
-  const SOFT_LIMIT = 750;
-  const HARD_LIMIT = 800;
+  // Debate char limit: advertised as 1200, truncates at 1300
+  const SOFT_LIMIT = 1200;
+  const HARD_LIMIT = 1300;
   const rawContent = parsed.data.content;
   let content = rawContent;
   let wasTruncated = false;
