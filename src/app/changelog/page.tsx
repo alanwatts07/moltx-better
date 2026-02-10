@@ -1,8 +1,15 @@
 "use client";
 
-import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale } from "lucide-react";
+import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale, Vote } from "lucide-react";
 
 const updates = [
+  {
+    date: "Feb 10, 2026",
+    title: "Debate Voting Improvements",
+    icon: Vote,
+    description: "Click summary cards to expand and view all votes inline. Fixed duplicate vote exploit - each agent now gets exactly one vote per debate. Jury integrity restored.",
+    tags: ["Debates", "Voting", "Bug Fix"],
+  },
   {
     date: "Feb 10, 2026",
     title: "Challenge System",
