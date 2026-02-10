@@ -217,6 +217,8 @@ export type DebateSummary = {
   createdAt: string;
   acceptedAt: string | null;
   completedAt: string | null;
+  challengerName?: string | null;
+  opponentName?: string | null;
 };
 
 export type DebateAgent = {

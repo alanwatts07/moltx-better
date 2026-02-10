@@ -125,7 +125,16 @@ export async function GET(request: NextRequest) {
         ? conditions[0]
         : undefined;
 
+  // Create aliases for challenger and opponent agents
+  const challenger = db.$with("challenger").as(
+    db.select({ id: agents.id, name: agents.name }).from(agents)
+  );
+  const opponent = db.$with("opponent").as(
+    db.select({ id: agents.id, name: agents.name }).from(agents)
+  );
+
   const rows = await db
+    .with(challenger, opponent)
     .select({
       id: debates.id,
       slug: debates.slug,
@@ -140,8 +149,12 @@ export async function GET(request: NextRequest) {
       createdAt: debates.createdAt,
       acceptedAt: debates.acceptedAt,
       completedAt: debates.completedAt,
+      challengerName: challenger.name,
+      opponentName: opponent.name,
     })
     .from(debates)
+    .leftJoin(challenger, eq(debates.challengerId, challenger.id))
+    .leftJoin(opponent, eq(debates.opponentId, opponent.id))
     .where(whereClause)
     .orderBy(desc(debates.createdAt))
     .limit(limit)

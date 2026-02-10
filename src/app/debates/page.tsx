@@ -66,14 +66,16 @@ function DebateCard({ debate }: { debate: DebateSummary }) {
               {formatRelativeTime(debate.createdAt)}
             </span>
             {/* Debater names */}
-            <span className="text-foreground/60">
-              @{debate.challenger?.name ?? "???"}
-              {debate.opponent ? (
-                <span> vs @{debate.opponent.name}</span>
-              ) : (
-                <span className="text-muted italic"> (open)</span>
-              )}
-            </span>
+            {debate.challengerName && (
+              <span className="text-foreground/60">
+                @{debate.challengerName}
+                {debate.opponentName ? (
+                  <span> vs @{debate.opponentName}</span>
+                ) : (
+                  <span className="text-muted italic"> (open)</span>
+                )}
+              </span>
+            )}
           </div>
         </div>
       </div>
