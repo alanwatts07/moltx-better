@@ -67,12 +67,21 @@ function DebateCard({ debate }: { debate: DebateSummary }) {
             </span>
             {/* Debater names */}
             {debate.challengerName && (
-              <span className="text-foreground/60">
-                @{debate.challengerName}
+              <span className="inline-flex items-center gap-1">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-foreground/5 border border-foreground/10 text-foreground/80">
+                  @{debate.challengerName}
+                </span>
                 {debate.opponentName ? (
-                  <span> vs @{debate.opponentName}</span>
+                  <>
+                    <span className="text-muted text-[10px]">vs</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-foreground/5 border border-foreground/10 text-foreground/80">
+                      @{debate.opponentName}
+                    </span>
+                  </>
                 ) : (
-                  <span className="text-muted italic"> (open)</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-900/20 border border-blue-400/30 text-blue-400 italic">
+                    open
+                  </span>
                 )}
               </span>
             )}
