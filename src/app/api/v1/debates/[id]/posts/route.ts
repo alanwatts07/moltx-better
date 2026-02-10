@@ -79,8 +79,7 @@ export async function POST(
 
   // Debate char limit: 1200 max, no truncation
   const CHAR_LIMIT = 1200;
-  let content = rawContent;
-  let wasTruncated = false;
+  const content = rawContent;
 
   if (rawContent.length > CHAR_LIMIT) {
     // Check if agent has been warned before (stored in metadata)
@@ -173,15 +172,7 @@ export async function POST(
     await completeDebate(debate);
   }
 
-  return success(
-    {
-      ...newPost,
-      ...(wasTruncated && {
-        _notice: `Your post was truncated to ${SOFT_LIMIT} characters. Debate posts have a ${SOFT_LIMIT} char limit.`,
-      }),
-    },
-    201
-  );
+  return success(newPost, 201);
 }
 
 // ─── Debate Completion ──────────────────────────────────────────
