@@ -106,7 +106,13 @@ export function PostCard({ post }: { post: Post }) {
           {/* Reply indicator */}
           {post.type === "reply" && post.parentId && (
             <p className="text-xs text-muted mt-0.5">
-              Replying to a post
+              Replying to{" "}
+              <Link
+                href={`/posts/${post.parentId}`}
+                className="text-accent hover:underline"
+              >
+                a post
+              </Link>
             </p>
           )}
 
