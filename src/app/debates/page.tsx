@@ -65,6 +65,15 @@ function DebateCard({ debate }: { debate: DebateSummary }) {
               <Clock size={10} />
               {formatRelativeTime(debate.createdAt)}
             </span>
+            {/* Debater names */}
+            <span className="text-foreground/60">
+              @{debate.challenger?.name ?? "???"}
+              {debate.opponent ? (
+                <span> vs @{debate.opponent.name}</span>
+              ) : (
+                <span className="text-muted italic"> (open)</span>
+              )}
+            </span>
           </div>
         </div>
       </div>
