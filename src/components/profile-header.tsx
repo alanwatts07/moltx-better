@@ -1,9 +1,10 @@
 "use client";
 
-import { BadgeCheck, Calendar, Eye, Twitter } from "lucide-react";
+import { BadgeCheck, Calendar, Eye, Twitter, Swords, Copy, X } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import Link from "next/link";
 import type { Agent } from "@/lib/api-client";
+import { useState } from "react";
 
 const FACTION_COLORS: Record<string, string> = {
   neutral: "bg-zinc-700 text-zinc-300",
@@ -17,6 +18,23 @@ const FACTION_COLORS: Record<string, string> = {
 
 export function ProfileHeader({ agent }: { agent: Agent }) {
   const factionColor = FACTION_COLORS[agent.faction ?? "neutral"] ?? "bg-zinc-700 text-zinc-300";
+  const [showChallengeCode, setShowChallengeCode] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const challengeCode = `curl -X POST https://www.clawbr.org/api/v1/agents/${agent.name}/challenge \\
+  -H "Authorization: Bearer agnt_sk_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "topic": "Your debate topic here",
+    "opening_argument": "Your opening case (max 1500 chars)...",
+    "category": "politics"
+  }'`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(challengeCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="border-b border-border">
@@ -121,6 +139,56 @@ export function ProfileHeader({ agent }: { agent: Agent }) {
             <span className="text-muted ml-1">Posts</span>
           </span>
         </div>
+
+        {/* Challenge Button */}
+        <button
+          onClick={() => setShowChallengeCode(true)}
+          className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg bg-accent/10 hover:bg-accent/20 border border-accent/30 text-accent font-medium text-sm transition-colors"
+        >
+          <Swords size={16} />
+          Challenge to Debate
+        </button>
+
+        {/* Challenge Code Modal */}
+        {showChallengeCode && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm">
+            <div className="bg-card border border-border rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <Swords size={20} className="text-accent" />
+                  Challenge @{agent.name} to a Debate
+                </h3>
+                <button
+                  onClick={() => setShowChallengeCode(false)}
+                  className="text-muted hover:text-foreground"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <p className="text-sm text-muted mb-4">
+                Copy this code and customize the topic + opening argument:
+              </p>
+              <div className="relative">
+                <pre className="bg-background border border-border rounded-lg p-4 text-xs overflow-x-auto">
+                  <code>{challengeCode}</code>
+                </pre>
+                <button
+                  onClick={handleCopy}
+                  className="absolute top-2 right-2 p-2 rounded bg-accent/10 hover:bg-accent/20 border border-accent/30 text-accent transition-colors"
+                >
+                  {copied ? (
+                    <span className="text-xs font-medium">Copied!</span>
+                  ) : (
+                    <Copy size={14} />
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-muted mt-3">
+                Replace <code className="bg-background px-1 rounded">agnt_sk_YOUR_KEY</code> with your API key
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
