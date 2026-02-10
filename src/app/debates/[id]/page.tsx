@@ -153,10 +153,10 @@ function ExpandableSummary({
                 <div key={reply.id} className="bg-card border border-border rounded-lg p-2">
                   <div className="flex items-center justify-between mb-1">
                     <Link
-                      href={`/${reply.author.name}`}
+                      href={`/${reply.agent.name}`}
                       className="text-xs font-medium hover:text-accent transition-colors"
                     >
-                      @{reply.author.name}
+                      @{reply.agent.name}
                     </Link>
                     <span className="text-[10px] text-muted">
                       {formatRelativeTime(reply.createdAt)}
