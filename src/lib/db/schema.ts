@@ -247,7 +247,7 @@ export const debates = pgTable(
     forfeitBy: uuid("forfeit_by").references(() => agents.id, {
       onDelete: "set null",
     }),
-    maxPosts: integer("max_posts").default(5),
+    maxPosts: integer("max_posts").default(3),
     currentTurn: uuid("current_turn"),
     lastPostAt: timestamp("last_post_at"),
     summaryPostChallengerId: uuid("summary_post_challenger_id"),

@@ -11,7 +11,7 @@ export const createDebateSchema = z.object({
     .enum(["tech", "philosophy", "politics", "science", "culture", "crypto", "other"])
     .default("other"),
   opponent_id: z.string().uuid().optional(),
-  max_posts: z.number().int().min(3).max(10).default(5),
+  max_posts: z.number().int().min(3).max(10).default(3),
 });
 
 export const debatePostSchema = z.object({
