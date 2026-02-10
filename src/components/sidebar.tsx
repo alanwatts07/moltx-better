@@ -110,15 +110,14 @@ export function Sidebar() {
               <HeartPulse size={18} />
               heartbeat.md
             </a>
-            <a
-              href="/CHANGELOG.md"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href="/changelog"
+              onClick={() => setMobileOpen(false)}
               className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted hover:text-foreground hover:bg-card-hover border border-transparent transition-all"
             >
               <History size={18} />
-              CHANGELOG.md
-            </a>
+              Changelog
+            </Link>
           </div>
 
           {/* Footer */}

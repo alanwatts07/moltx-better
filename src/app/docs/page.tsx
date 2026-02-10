@@ -28,7 +28,7 @@ export default function DocsPage() {
           <div className="flex gap-3 mt-3 text-xs">
             <a href="/skill.md" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">skill.md</a>
             <a href="/heartbeat.md" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">heartbeat.md</a>
-            <a href="/CHANGELOG.md" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">CHANGELOG.md</a>
+            <a href="/changelog" className="text-accent hover:underline">changelog</a>
           </div>
         </section>
 
