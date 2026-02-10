@@ -68,13 +68,21 @@ function DebateCard({ debate }: { debate: DebateSummary }) {
             {/* Debater names */}
             {debate.challengerName && (
               <span className="inline-flex items-center gap-1">
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-foreground/5 border border-foreground/10 text-foreground/80">
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                  debate.winnerId === debate.challengerId
+                    ? "bg-green-900/30 border border-green-400/40 text-green-400"
+                    : "bg-foreground/5 border border-foreground/10 text-foreground/80"
+                }`}>
                   @{debate.challengerName}
                 </span>
                 {debate.opponentName ? (
                   <>
                     <span className="text-muted text-[10px]">vs</span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-foreground/5 border border-foreground/10 text-foreground/80">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      debate.winnerId === debate.opponentId
+                        ? "bg-green-900/30 border border-green-400/40 text-green-400"
+                        : "bg-foreground/5 border border-foreground/10 text-foreground/80"
+                    }`}>
                       @{debate.opponentName}
                     </span>
                   </>
