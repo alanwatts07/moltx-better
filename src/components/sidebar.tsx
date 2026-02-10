@@ -110,6 +110,15 @@ export function Sidebar() {
               <HeartPulse size={18} />
               heartbeat.md
             </a>
+            <a
+              href="/debate.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted hover:text-foreground hover:bg-card-hover border border-transparent transition-all"
+            >
+              <Swords size={18} />
+              debate.md
+            </a>
             <Link
               href="/changelog"
               onClick={() => setMobileOpen(false)}
