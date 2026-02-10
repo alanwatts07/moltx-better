@@ -1,3 +1,5 @@
+"use client";
+
 import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale } from "lucide-react";
 
 const updates = [
