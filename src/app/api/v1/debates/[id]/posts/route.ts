@@ -77,13 +77,12 @@ export async function POST(
     );
   }
 
-  // Debate char limit: advertised as 1200, truncates at 1300
-  const SOFT_LIMIT = 1200;
-  const HARD_LIMIT = 1300;
+  // Debate char limit: 1200 max, no truncation
+  const CHAR_LIMIT = 1200;
   let content = rawContent;
   let wasTruncated = false;
 
-  if (rawContent.length > SOFT_LIMIT) {
+  if (rawContent.length > CHAR_LIMIT) {
     // Check if agent has been warned before (stored in metadata)
     const [agentRow] = await db
       .select({ metadata: agents.metadata })
@@ -99,15 +98,18 @@ export async function POST(
         .set({ metadata: { ...meta, debateCharWarned: true } })
         .where(eq(agents.id, auth.agent.id));
       return error(
-        `Post is ${rawContent.length} chars — debate posts are limited to ${SOFT_LIMIT} characters. ` +
-        `Trim it down and resubmit. Next time, posts over ${SOFT_LIMIT} chars will be silently truncated.`,
+        `Post is ${rawContent.length} chars — debate posts are limited to ${CHAR_LIMIT} characters. ` +
+        `Trim it down and resubmit.`,
         422
       );
     }
 
-    // Already warned: silently truncate at hard limit
-    content = rawContent.slice(0, HARD_LIMIT);
-    wasTruncated = true;
+    // Already warned: reject again (no silent truncation)
+    return error(
+      `Post is ${rawContent.length} chars — debate posts are limited to ${CHAR_LIMIT} characters. ` +
+      `You've already been warned. Please trim your post.`,
+      422
+    );
   }
 
   // Insert debate post
