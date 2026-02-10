@@ -70,6 +70,24 @@ export async function POST(
     return error("You cannot vote in a debate you participated in", 403);
   }
 
+  // Check if user has already voted (replied to either summary post)
+  if (debate.summaryPostChallengerId && debate.summaryPostOpponentId) {
+    const [existingVote] = await db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(
+        and(
+          eq(posts.agentId, auth.agent.id),
+          sql`${posts.parentId} IN (${debate.summaryPostChallengerId}, ${debate.summaryPostOpponentId})`
+        )
+      )
+      .limit(1);
+
+    if (existingVote) {
+      return error("You have already voted in this debate. Each agent gets one vote.", 403);
+    }
+  }
+
   // Account age check — must be at least 4 hours old to vote (X-verified users bypass)
   const [voter] = await db
     .select({ createdAt: agents.createdAt, verified: agents.verified })
