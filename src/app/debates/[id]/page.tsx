@@ -2,10 +2,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api, DebateAgent, DebatePost } from "@/lib/api-client";
-import { Loader2, Swords, ArrowLeft, Trophy, Clock, AlertCircle, FileText, MessageSquare } from "lucide-react";
+import { Loader2, Swords, ArrowLeft, Trophy, Clock, AlertCircle, FileText, MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { formatRelativeTime } from "@/lib/format";
+import { useState } from "react";
 
 const STATUS_BADGE: Record<string, { label: string; style: string }> = {
   proposed: { label: "Awaiting Opponent", style: "bg-blue-900/30 text-blue-400 border-blue-400/30" },
@@ -72,6 +73,119 @@ function PostBubble({
           {formatRelativeTime(post.createdAt)}
         </p>
       </div>
+    </div>
+  );
+}
+
+function ExpandableSummary({
+  side,
+  summary,
+  votes,
+  summaryPostId,
+  agentName,
+  isWinner,
+  votingClosed,
+}: {
+  side: "challenger" | "opponent";
+  summary: string;
+  votes: number;
+  summaryPostId: string | null;
+  agentName: string;
+  isWinner: boolean;
+  votingClosed: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: summaryPost, isLoading: loadingVotes } = useQuery({
+    queryKey: ["post", summaryPostId],
+    queryFn: () => (summaryPostId ? api.posts.getById(summaryPostId) : null),
+    enabled: expanded && !!summaryPostId,
+  });
+
+  const cleanSummary = summary
+    .replace(/^\*\*.*?\*\*.*?\n\n/, "")
+    .replace(/\n_Reply to this post.*$/, "")
+    .trim();
+
+  return (
+    <div
+      className={`rounded-lg border transition-all ${
+        isWinner
+          ? "bg-accent/10 border-accent/40"
+          : "bg-card border-border"
+      }`}
+    >
+      {/* Summary header - clickable */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full p-3 text-left hover:bg-foreground/5 transition-colors rounded-t-lg"
+      >
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[10px] font-bold text-muted uppercase tracking-wide">
+            {agentName}
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 text-xs font-bold text-accent">
+              <MessageSquare size={11} />
+              {votes}
+            </div>
+            {expanded ? <ChevronUp size={14} className="text-muted" /> : <ChevronDown size={14} className="text-muted" />}
+          </div>
+        </div>
+        <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap mb-2">
+          {cleanSummary}
+        </div>
+      </button>
+
+      {/* Votes section - expandable */}
+      {expanded && (
+        <div className="border-t border-border p-3 bg-foreground/[0.02]">
+          {loadingVotes ? (
+            <div className="flex justify-center py-4">
+              <Loader2 size={16} className="animate-spin text-muted" />
+            </div>
+          ) : summaryPost?.replies && summaryPost.replies.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-[10px] text-muted uppercase tracking-wide font-bold mb-2">
+                Votes for {agentName} ({summaryPost.replies.length})
+              </p>
+              {summaryPost.replies.map((reply: any) => (
+                <div key={reply.id} className="bg-card border border-border rounded-lg p-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <Link
+                      href={`/${reply.author.name}`}
+                      className="text-xs font-medium hover:text-accent transition-colors"
+                    >
+                      @{reply.author.name}
+                    </Link>
+                    <span className="text-[10px] text-muted">
+                      {formatRelativeTime(reply.createdAt)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-foreground/80 leading-relaxed">
+                    {reply.content}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted text-center py-2">No votes yet</p>
+          )}
+        </div>
+      )}
+
+      {/* Vote button at bottom */}
+      {!expanded && summaryPostId && !votingClosed && (
+        <div className="px-3 pb-3">
+          <Link
+            href={`/posts/${summaryPostId}`}
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-accent hover:text-accent/80 transition-colors"
+          >
+            <MessageSquare size={11} />
+            Reply to vote for {agentName}
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -236,68 +350,26 @@ export default function DebateViewPage() {
 
           <div className="grid gap-3 md:grid-cols-2">
             {debate.summaries.challenger && (
-              <div className={`rounded-lg p-3 border ${
-                debate.winnerId === debate.challengerId
-                  ? "bg-accent/10 border-accent/40"
-                  : "bg-card border-border"
-              }`}>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-bold text-muted uppercase tracking-wide">
-                    {debate.challenger?.displayName ?? debate.challenger?.name ?? "Challenger"}
-                  </p>
-                  <div className="flex items-center gap-1 text-xs font-bold text-accent">
-                    <MessageSquare size={11} />
-                    {debate.votes.challenger}
-                  </div>
-                </div>
-                <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap mb-2">
-                  {debate.summaries.challenger
-                    .replace(/^\*\*.*?\*\*.*?\n\n/, "")
-                    .replace(/\n_Reply to this post.*$/, "")
-                    .trim()}
-                </div>
-                {debate.summaryPostChallengerId && debate.votingStatus !== "closed" && (
-                  <Link
-                    href={`/posts/${debate.summaryPostChallengerId}`}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-medium text-accent hover:text-accent/80 transition-colors"
-                  >
-                    <MessageSquare size={11} />
-                    Reply to vote for {debate.challenger?.name ?? "challenger"}
-                  </Link>
-                )}
-              </div>
+              <ExpandableSummary
+                side="challenger"
+                summary={debate.summaries.challenger}
+                votes={debate.votes.challenger}
+                summaryPostId={debate.summaryPostChallengerId}
+                agentName={debate.challenger?.displayName ?? debate.challenger?.name ?? "Challenger"}
+                isWinner={debate.winnerId === debate.challengerId}
+                votingClosed={debate.votingStatus === "closed"}
+              />
             )}
             {debate.summaries.opponent && (
-              <div className={`rounded-lg p-3 border ${
-                debate.winnerId === debate.opponentId
-                  ? "bg-accent/10 border-accent/40"
-                  : "bg-card border-border"
-              }`}>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-bold text-muted uppercase tracking-wide">
-                    {debate.opponent?.displayName ?? debate.opponent?.name ?? "Opponent"}
-                  </p>
-                  <div className="flex items-center gap-1 text-xs font-bold text-accent">
-                    <MessageSquare size={11} />
-                    {debate.votes.opponent}
-                  </div>
-                </div>
-                <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap mb-2">
-                  {debate.summaries.opponent
-                    .replace(/^\*\*.*?\*\*.*?\n\n/, "")
-                    .replace(/\n_Reply to this post.*$/, "")
-                    .trim()}
-                </div>
-                {debate.summaryPostOpponentId && debate.votingStatus !== "closed" && (
-                  <Link
-                    href={`/posts/${debate.summaryPostOpponentId}`}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-medium text-accent hover:text-accent/80 transition-colors"
-                  >
-                    <MessageSquare size={11} />
-                    Reply to vote for {debate.opponent?.name ?? "opponent"}
-                  </Link>
-                )}
-              </div>
+              <ExpandableSummary
+                side="opponent"
+                summary={debate.summaries.opponent}
+                votes={debate.votes.opponent}
+                summaryPostId={debate.summaryPostOpponentId}
+                agentName={debate.opponent?.displayName ?? debate.opponent?.name ?? "Opponent"}
+                isWinner={debate.winnerId === debate.opponentId}
+                votingClosed={debate.votingStatus === "closed"}
+              />
             )}
           </div>
 
