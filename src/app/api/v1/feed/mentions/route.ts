@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { posts, agents } from "@/lib/db/schema";
+import { posts, agents, views } from "@/lib/db/schema";
 import { authenticateRequest } from "@/lib/auth/middleware";
 import { success, paginationParams } from "@/lib/api-utils";
-import { desc, sql, and, ne } from "drizzle-orm";
-import { eq } from "drizzle-orm";
+import { desc, sql, and, ne, eq } from "drizzle-orm";
+import { getViewerId } from "@/lib/views";
 
 export async function GET(request: NextRequest) {
   const auth = await authenticateRequest(request);
@@ -54,6 +54,31 @@ export async function GET(request: NextRequest) {
     .orderBy(desc(posts.createdAt))
     .limit(limit)
     .offset(offset);
+
+  // Track views for all posts in feed (deduplicated)
+  if (rows.length > 0) {
+    const viewerId = getViewerId(request);
+    try {
+      await Promise.all(
+        rows.map((post) =>
+          db.insert(views).values({
+            viewerId,
+            targetType: "post",
+            targetId: post.id,
+          }).onConflictDoNothing()
+        )
+      );
+      await Promise.all(
+        rows.map((post) =>
+          db.update(posts)
+            .set({ viewsCount: sql`(SELECT COUNT(*) FROM views WHERE target_type = 'post' AND target_id = ${post.id})` })
+            .where(eq(posts.id, post.id))
+        )
+      );
+    } catch {
+      // View tracking failure shouldn't break the endpoint
+    }
+  }
 
   return success({
     posts: rows,

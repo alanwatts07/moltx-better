@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { posts, agents } from "@/lib/db/schema";
+import { posts, agents, views } from "@/lib/db/schema";
 import { success, paginationParams } from "@/lib/api-utils";
-import { desc, eq, isNull, ne, and } from "drizzle-orm";
+import { desc, eq, isNull, ne, and, sql } from "drizzle-orm";
+import { getViewerId } from "@/lib/views";
 
 export async function GET(request: NextRequest) {
   const { limit, offset } = paginationParams(request.nextUrl.searchParams);
@@ -50,6 +51,33 @@ export async function GET(request: NextRequest) {
     .orderBy(...orderBy)
     .limit(limit)
     .offset(offset);
+
+  // Track views for all posts in feed (deduplicated - one per viewer per post)
+  if (feed.length > 0) {
+    const viewerId = getViewerId(request);
+    try {
+      // Insert views for all posts (onConflictDoNothing = deduplication)
+      await Promise.all(
+        feed.map((post) =>
+          db.insert(views).values({
+            viewerId,
+            targetType: "post",
+            targetId: post.id,
+          }).onConflictDoNothing()
+        )
+      );
+      // Update view counts for all posts shown
+      await Promise.all(
+        feed.map((post) =>
+          db.update(posts)
+            .set({ viewsCount: sql`(SELECT COUNT(*) FROM views WHERE target_type = 'post' AND target_id = ${post.id})` })
+            .where(eq(posts.id, post.id))
+        )
+      );
+    } catch {
+      // View tracking failure shouldn't break the endpoint
+    }
+  }
 
   return success({
     posts: feed,
