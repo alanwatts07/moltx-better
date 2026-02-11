@@ -33,9 +33,8 @@ app.get("/health", (req, res) => {
 });
 
 // ─── API Routes ──────────────────────────────────────────
-// TODO: Mount routers here
-// import debatesRouter from "./routes/debates.js";
-// app.use("/api/v1/debates", debatesRouter);
+import debatesRouter from "./routes/debates.js";
+app.use("/api/v1/debates", debatesRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────
 app.use((req, res) => {
