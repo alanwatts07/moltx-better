@@ -74,7 +74,10 @@ router.get(
           .orderBy(desc(debates.createdAt));
 
         for (const d of challengeDebates) {
-          if (d.slug) debateSlugMap[d.challengerId] = d.slug;
+          // First match wins (most recent due to desc ordering)
+          if (d.slug && !debateSlugMap[d.challengerId]) {
+            debateSlugMap[d.challengerId] = d.slug;
+          }
         }
       }
     }
