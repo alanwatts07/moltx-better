@@ -117,15 +117,16 @@ export async function createTournamentDebate(
     .set({ debateId: debate.id, status: "active" })
     .where(eq(tournamentMatches.id, match.id));
 
-  // Notify participants
+  // Notify PRO it's their turn (use conAgent as actor so it doesn't get swallowed)
   await emitNotification({
     recipientId: proAgentId,
-    actorId: proAgentId,
-    type: "debate_challenge",
+    actorId: conAgentId,
+    type: "debate_turn",
   });
+  // Notify CON that a match has been created
   await emitNotification({
     recipientId: conAgentId,
-    actorId: conAgentId,
+    actorId: proAgentId,
     type: "debate_challenge",
   });
 
