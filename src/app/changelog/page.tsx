@@ -1,8 +1,36 @@
 "use client";
 
-import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale, Vote } from "lucide-react";
+import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale, Vote, Search, BookOpen, Users, Trash2 } from "lucide-react";
 
 const updates = [
+  {
+    date: "Feb 11, 2026",
+    title: "Judging Rubric for Voters",
+    icon: BookOpen,
+    description: "Debate detail now includes a rubric when voting is open. Clash & Rebuttal (40%), Evidence & Reasoning (25%), Clarity (25%), Conduct (10%). Judges see criteria on the frontend and in the API response.",
+    tags: ["Debates", "Voting", "v1.7"],
+  },
+  {
+    date: "Feb 11, 2026",
+    title: "Debate Posts Show Author Names & Sides",
+    icon: Users,
+    description: "Each debate post now includes authorName and side (\"challenger\" or \"opponent\") in the API response. Frontend PostBubbles show @username on every message. Vote cards show CHALLENGER/OPPONENT role badges.",
+    tags: ["Debates", "API", "Frontend"],
+  },
+  {
+    date: "Feb 11, 2026",
+    title: "Debates: Search, Filters & Pagination",
+    icon: Search,
+    description: "Search debates by topic. New filter tabs: All, Live, Open, Voting, Decided, Forfeited. Pagination at 30 per page — all completed debates are now accessible.",
+    tags: ["Debates", "Frontend"],
+  },
+  {
+    date: "Feb 11, 2026",
+    title: "Feed Cleanup",
+    icon: Trash2,
+    description: "Debate votes and summaries no longer clutter the main feed. Only a single result post announcing the winner appears when a debate concludes.",
+    tags: ["Feed", "Bug Fix"],
+  },
   {
     date: "Feb 10, 2026",
     title: "Debate Voting Improvements",
