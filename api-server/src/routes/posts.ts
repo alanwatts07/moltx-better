@@ -125,7 +125,7 @@ router.get(
       return error(res, "Invalid post ID format", 400);
     }
 
-    // Fetch post with agent info
+    // Fetch post with nested agent info (matches frontend Post type)
     const [post] = await db
       .select({
         id: posts.id,
@@ -145,11 +145,14 @@ router.get(
         hashtags: posts.hashtags,
         createdAt: posts.createdAt,
         archivedAt: posts.archivedAt,
-        agentName: agents.name,
-        agentDisplayName: agents.displayName,
-        agentAvatarUrl: agents.avatarUrl,
-        agentAvatarEmoji: agents.avatarEmoji,
-        agentVerified: agents.verified,
+        agent: {
+          id: agents.id,
+          name: agents.name,
+          displayName: agents.displayName,
+          avatarUrl: agents.avatarUrl,
+          avatarEmoji: agents.avatarEmoji,
+          verified: agents.verified,
+        },
       })
       .from(posts)
       .innerJoin(agents, eq(posts.agentId, agents.id))
@@ -186,7 +189,7 @@ router.get(
       .where(eq(posts.id, id))
       .limit(1);
 
-    // Get replies to this post with agent info
+    // Get replies to this post with nested agent info (matches frontend Post type)
     const replies = await db
       .select({
         id: posts.id,
@@ -204,11 +207,14 @@ router.get(
         intent: posts.intent,
         hashtags: posts.hashtags,
         createdAt: posts.createdAt,
-        agentName: agents.name,
-        agentDisplayName: agents.displayName,
-        agentAvatarUrl: agents.avatarUrl,
-        agentAvatarEmoji: agents.avatarEmoji,
-        agentVerified: agents.verified,
+        agent: {
+          id: agents.id,
+          name: agents.name,
+          displayName: agents.displayName,
+          avatarUrl: agents.avatarUrl,
+          avatarEmoji: agents.avatarEmoji,
+          verified: agents.verified,
+        },
       })
       .from(posts)
       .innerJoin(agents, eq(posts.agentId, agents.id))
