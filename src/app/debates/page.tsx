@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { api, DebateSummary } from "@/lib/api-client";
-import { Loader2, Swords, Clock, Trophy, Vote, Zap, Search } from "lucide-react";
+import { api, DebateSummary, TournamentVotingDebate } from "@/lib/api-client";
+import { Loader2, Swords, Clock, Trophy, Vote, Zap, Search, Shield, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { formatRelativeTime } from "@/lib/format";
 import { useState } from "react";
@@ -101,6 +101,73 @@ function DebateCard({ debate }: { debate: DebateSummary }) {
   );
 }
 
+function TournamentVotingCard({ debate }: { debate: TournamentVotingDebate }) {
+  const tc = debate.tournamentContext;
+  return (
+    <Link
+      href={`/debates/${debate.slug ?? debate.id}`}
+      className="block p-3 rounded-lg border border-accent/30 bg-accent/5 hover:bg-accent/10 transition-colors"
+    >
+      <div className="flex items-center gap-2 mb-1.5">
+        <Shield size={12} className="text-purple-400" />
+        <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">
+          Blind Vote
+        </span>
+        {tc && (
+          <span className="text-[10px] text-muted">
+            {tc.tournamentTitle} — {tc.roundLabel} #{tc.matchNumber}
+          </span>
+        )}
+      </div>
+      <p className="text-sm font-medium leading-snug mb-1.5">{debate.topic}</p>
+      <div className="flex items-center gap-3 text-[10px] text-muted">
+        <span className="flex items-center gap-1">
+          <span className="px-1.5 py-0.5 rounded bg-blue-900/30 text-blue-400 font-bold">PRO</span>
+          vs
+          <span className="px-1.5 py-0.5 rounded bg-red-900/30 text-red-400 font-bold">CON</span>
+        </span>
+        <span className="text-border">|</span>
+        <span className="flex items-center gap-1">
+          <Vote size={10} className="text-purple-400" />
+          Voting open
+        </span>
+        {debate.category && debate.category !== "other" && (
+          <>
+            <span className="text-border">|</span>
+            <span className="capitalize">{debate.category}</span>
+          </>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function TournamentVotingSection({ debates }: { debates: TournamentVotingDebate[] }) {
+  if (debates.length === 0) return null;
+
+  return (
+    <div className="border-b border-border bg-accent/[0.03] px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Trophy size={14} className="text-accent" />
+        <h2 className="text-xs font-bold text-accent uppercase tracking-wider">
+          Tournament Votes Needed
+        </h2>
+        <span className="ml-auto px-1.5 py-0.5 rounded-full bg-purple-900/30 text-purple-400 text-[10px] font-bold">
+          {debates.length}
+        </span>
+      </div>
+      <p className="text-[10px] text-muted mb-2">
+        These tournament debates need your vote. Identities are hidden — judge on argument quality alone.
+      </p>
+      <div className="space-y-2">
+        {debates.map((d) => (
+          <TournamentVotingCard key={d.id} debate={d} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const PAGE_SIZE = 30;
 
 export default function DebatesListPage() {
@@ -119,6 +186,12 @@ export default function DebatesListPage() {
         page * PAGE_SIZE,
         searchQuery || undefined
       ),
+  });
+
+  const { data: hubData } = useQuery({
+    queryKey: ["debates-hub"],
+    queryFn: () => api.debates.hub(),
+    refetchInterval: 30000,
   });
 
   const debates = data?.debates ?? [];
@@ -173,6 +246,11 @@ export default function DebatesListPage() {
           ))}
         </div>
       </div>
+
+      {/* Tournament votes needed */}
+      {hubData?.tournamentVoting && hubData.tournamentVoting.length > 0 && (
+        <TournamentVotingSection debates={hubData.tournamentVoting} />
+      )}
 
       {/* List */}
       {isLoading && (

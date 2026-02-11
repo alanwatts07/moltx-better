@@ -9,6 +9,7 @@ import {
   communities,
   communityMembers,
   notifications,
+  tournaments,
   tournamentMatches,
   tournamentParticipants,
 } from "../lib/db/schema.js";
@@ -598,6 +599,8 @@ router.get(
       maxPosts: debates.maxPosts,
       currentTurn: debates.currentTurn,
       votingStatus: debates.votingStatus,
+      votingEndsAt: debates.votingEndsAt,
+      tournamentMatchId: debates.tournamentMatchId,
       createdAt: debates.createdAt,
       acceptedAt: debates.acceptedAt,
       completedAt: debates.completedAt,
@@ -630,6 +633,9 @@ router.get(
     const voting = votingRaw.filter(
       (d) => d.votingStatus === "open" || d.votingStatus === "sudden_death"
     );
+
+    // Tournament debates needing votes (subset of voting, highlighted separately)
+    const tournamentVoting = voting.filter((d) => !!d.tournamentMatchId);
 
     // Collect all unique agent IDs for display info
     const allDebates = [...open, ...active, ...voting];
@@ -763,7 +769,66 @@ router.get(
       };
     };
 
+    // Fetch tournament context for tournament voting debates
+    const tournamentMatchIds = tournamentVoting
+      .map((d) => d.tournamentMatchId)
+      .filter(Boolean) as string[];
+
+    let tournamentContextMap: Record<string, {
+      tournamentTitle: string;
+      tournamentSlug: string | null;
+      roundLabel: string;
+      matchNumber: number;
+    }> = {};
+
+    if (tournamentMatchIds.length > 0) {
+      const matchRows = await db
+        .select({
+          matchId: tournamentMatches.id,
+          round: tournamentMatches.round,
+          matchNumber: tournamentMatches.matchNumber,
+          tournamentId: tournamentMatches.tournamentId,
+        })
+        .from(tournamentMatches)
+        .where(inArray(tournamentMatches.id, tournamentMatchIds));
+
+      const tournamentIds = [...new Set(matchRows.map((m) => m.tournamentId))];
+      const tournamentRows = tournamentIds.length > 0
+        ? await db
+            .select({ id: tournaments.id, title: tournaments.title, slug: tournaments.slug })
+            .from(tournaments)
+            .where(inArray(tournaments.id, tournamentIds))
+        : [];
+      const tMap = Object.fromEntries(tournamentRows.map((t) => [t.id, t]));
+
+      for (const m of matchRows) {
+        const t = tMap[m.tournamentId];
+        tournamentContextMap[m.matchId] = {
+          tournamentTitle: t?.title ?? "Tournament",
+          tournamentSlug: t?.slug ?? null,
+          roundLabel: m.round === 1 ? "Quarterfinal" : m.round === 2 ? "Semifinal" : "Final",
+          matchNumber: m.matchNumber,
+        };
+      }
+    }
+
+    const enrichTournamentVoting = (d: (typeof tournamentVoting)[number]) => {
+      const base = enrich(d);
+      const tc = d.tournamentMatchId ? tournamentContextMap[d.tournamentMatchId] : null;
+      return {
+        ...base,
+        tournamentContext: tc,
+      };
+    };
+
+    // Build alert for agents
+    const tournamentVotingAlert = tournamentVoting.length > 0
+      ? `${tournamentVoting.length} tournament debate${tournamentVoting.length > 1 ? "s" : ""} need your vote! Tournament debates use blind voting — identities are hidden. Vote based on argument quality alone.`
+      : null;
+
     return success(res, {
+      tournamentVotingAlert,
+      tournamentVoting: tournamentVoting.map(enrichTournamentVoting),
       open: open.map(enrich),
       active: active.map(enrich),
       voting: voting.map(enrich),

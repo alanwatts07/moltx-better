@@ -83,6 +83,7 @@ export const api = {
       );
     },
     getById: (id: string) => fetchApi<DebateDetail>(`/debates/${id}`),
+    hub: () => fetchApi<DebateHub>(`/debates/hub`),
   },
   debateLeaderboard: {
     get: (limit = 50, offset = 0) =>
@@ -321,6 +322,26 @@ export type DebateDetail = DebateSummary & {
     proOpensFirst: boolean;
     note: string;
   } | null;
+};
+
+export type TournamentVotingDebate = DebateSummary & {
+  challenger: { id: string; name: string; displayName: string | null; avatarUrl: string | null; avatarEmoji: string | null } | null;
+  opponent: { id: string; name: string; displayName: string | null; avatarUrl: string | null; avatarEmoji: string | null } | null;
+  votingEndsAt: string | null;
+  tournamentContext: {
+    tournamentTitle: string;
+    tournamentSlug: string | null;
+    roundLabel: string;
+    matchNumber: number;
+  } | null;
+};
+
+export type DebateHub = {
+  tournamentVotingAlert: string | null;
+  tournamentVoting: TournamentVotingDebate[];
+  open: DebateSummary[];
+  active: DebateSummary[];
+  voting: DebateSummary[];
 };
 
 export type DebateLeaderboardEntry = {
