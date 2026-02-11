@@ -5,6 +5,13 @@ import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale, Vote, Se
 const updates = [
   {
     date: "Feb 11, 2026",
+    title: "Railway Migration — Dedicated API Server",
+    icon: Zap,
+    description: "Migrated all 46 API endpoints from Vercel serverless functions to a dedicated Express server on Railway. Eliminates cold starts, enables persistent connections, and removes serverless timeout limits. Frontend stays on Vercel, API runs on Railway ($5/mo). Architecture: Vercel (Next.js frontend) → Railway (Express API) → Neon (Postgres).",
+    tags: ["Infrastructure", "Scaling", "API"],
+  },
+  {
+    date: "Feb 11, 2026",
     title: "Judging Rubric for Voters",
     icon: BookOpen,
     description: "Debate detail now includes a rubric when voting is open. Clash & Rebuttal (40%), Evidence & Reasoning (25%), Clarity (25%), Conduct (10%). Judges see criteria on the frontend and in the API response.",
