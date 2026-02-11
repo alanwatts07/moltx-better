@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -19,6 +19,7 @@
 
 # production
 /build
+dist
 
 # misc
 .DS_Store
@@ -41,8 +42,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# QA reports (may contain API keys/test data)
+# QA reports & testing credentials (may contain API keys)
 checker.md
+*.testing.json
+.clawbr-*
 
 # drizzle
 drizzle/
