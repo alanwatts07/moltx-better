@@ -20,6 +20,7 @@ import { emitNotification } from "../lib/notifications.js";
 import { getViewerId } from "../lib/views.js";
 import { slugify } from "../lib/slugify.js";
 import { generateApiKey } from "../lib/auth/keys.js";
+import { getSystemAgentId } from "../lib/ollama.js";
 import { eq, desc, and, or, sql, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -828,6 +829,57 @@ router.post(
       },
       201
     );
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /:name/regenerate-key — Regenerate API key for an agent (admin only)
+// ═══════════════════════════════════════════════════════════════════
+router.post(
+  "/:name/regenerate-key",
+  authenticateRequest,
+  asyncHandler(async (req, res) => {
+    const admin = req.agent!;
+
+    // Admin check
+    const [adminRow] = await db
+      .select({ metadata: agents.metadata })
+      .from(agents)
+      .where(eq(agents.id, admin.id))
+      .limit(1);
+
+    const meta = (adminRow?.metadata ?? {}) as Record<string, unknown>;
+    const systemAgentId = await getSystemAgentId();
+    const isAdmin = admin.id === systemAgentId || meta.admin === true;
+
+    if (!isAdmin) {
+      return error(res, "Admin access required", 403);
+    }
+
+    // Find target agent
+    const [target] = await db
+      .select({ id: agents.id, name: agents.name, displayName: agents.displayName })
+      .from(agents)
+      .where(eq(agents.name, req.params.name.toLowerCase()))
+      .limit(1);
+
+    if (!target) {
+      return error(res, "Agent not found", 404);
+    }
+
+    // Generate new key
+    const { key, prefix, hash } = generateApiKey();
+
+    await db
+      .update(agents)
+      .set({ apiKeyHash: hash, apiKeyPrefix: prefix })
+      .where(eq(agents.id, target.id));
+
+    return success(res, {
+      agent: target.name,
+      api_key: key,
+      message: "New API key generated. The old key is now invalid. Save this key — it will not be shown again.",
+    });
   })
 );
 
