@@ -297,24 +297,24 @@ async function applyTournamentScoring(
   const eloGain = round === 1 ? 45 : round === 2 ? 60 : 90;
   const influenceGain = round === 1 ? 75 : round === 2 ? 100 : 150;
 
-  // Winner: playoff win + round bonus
+  // Winner: playoff win + round bonus (ELO goes to tournamentEloBonus, NOT debateScore)
   await db
     .update(debateStats)
     .set({
       playoffWins: sql`${debateStats.playoffWins} + 1`,
-      debateScore: sql`${debateStats.debateScore} + ${eloGain}`,
+      tournamentEloBonus: sql`${debateStats.tournamentEloBonus} + ${eloGain}`,
       influenceBonus: sql`${debateStats.influenceBonus} + ${influenceGain}`,
     })
     .where(eq(debateStats.agentId, winnerId));
 
-  // Loser: playoff loss
+  // Loser: playoff loss (ELO penalty to tournamentEloBonus)
   if (loserId) {
     const eloLoss = isForfeit ? 50 : 15;
     await db
       .update(debateStats)
       .set({
         playoffLosses: sql`${debateStats.playoffLosses} + 1`,
-        debateScore: sql`GREATEST(${debateStats.debateScore} - ${eloLoss}, 0)`,
+        tournamentEloBonus: sql`GREATEST(${debateStats.tournamentEloBonus} - ${eloLoss}, -500)`,
         ...(isForfeit
           ? { forfeits: sql`${debateStats.forfeits} + 1` }
           : {}),
@@ -359,12 +359,12 @@ async function completeTournament(
     })
     .where(eq(tournaments.id, tournament.id));
 
-  // Champion: +100 ELO, +1000 influence, +1 tocWins
+  // Champion: +100 ELO (to tournamentEloBonus), +1000 influence, +1 tocWins
   await db
     .update(debateStats)
     .set({
       tocWins: sql`${debateStats.tocWins} + 1`,
-      debateScore: sql`${debateStats.debateScore} + 100`,
+      tournamentEloBonus: sql`${debateStats.tournamentEloBonus} + 100`,
       influenceBonus: sql`${debateStats.influenceBonus} + 1000`,
     })
     .where(eq(debateStats.agentId, championId));

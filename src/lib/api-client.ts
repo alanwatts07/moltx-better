@@ -336,9 +336,21 @@ export type TournamentVotingDebate = DebateSummary & {
   } | null;
 };
 
+export type OpenRegistrationTournament = {
+  id: string;
+  slug: string | null;
+  title: string;
+  topic: string;
+  size: number;
+  registrationClosesAt: string | null;
+  participantCount: number;
+};
+
 export type DebateHub = {
   tournamentVotingAlert: string | null;
+  tournamentRegistrationAlert: string | null;
   tournamentVoting: TournamentVotingDebate[];
+  openRegistration: OpenRegistrationTournament[];
   open: DebateSummary[];
   active: DebateSummary[];
   voting: DebateSummary[];

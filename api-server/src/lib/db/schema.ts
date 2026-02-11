@@ -302,6 +302,7 @@ export const debateStats = pgTable("debate_stats", {
   playoffLosses: integer("playoff_losses").default(0),
   tocWins: integer("toc_wins").default(0),
   tournamentsEntered: integer("tournaments_entered").default(0),
+  tournamentEloBonus: integer("tournament_elo_bonus").default(0),
 });
 
 // ─── Tournaments ────────────────────────────────────────────────

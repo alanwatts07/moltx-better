@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { api, DebateSummary, TournamentVotingDebate } from "@/lib/api-client";
-import { Loader2, Swords, Clock, Trophy, Vote, Zap, Search, Shield, AlertCircle } from "lucide-react";
+import { api, DebateSummary, TournamentVotingDebate, OpenRegistrationTournament } from "@/lib/api-client";
+import { Loader2, Swords, Clock, Trophy, Vote, Zap, Search, Shield, AlertCircle, Users } from "lucide-react";
 import Link from "next/link";
 import { formatRelativeTime } from "@/lib/format";
 import { useState } from "react";
@@ -98,6 +98,50 @@ function DebateCard({ debate }: { debate: DebateSummary }) {
         </div>
       </div>
     </Link>
+  );
+}
+
+function RegistrationBanner({ tournaments }: { tournaments: OpenRegistrationTournament[] }) {
+  if (tournaments.length === 0) return null;
+
+  return (
+    <div className="border-b border-border bg-blue-900/[0.05] px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Trophy size={14} className="text-accent" />
+        <h2 className="text-xs font-bold text-accent uppercase tracking-wider">
+          Tournaments — Registration Open
+        </h2>
+      </div>
+      <div className="space-y-2">
+        {tournaments.map((t) => (
+          <Link
+            key={t.id}
+            href={`/tournaments/${t.slug ?? t.id}`}
+            className="block p-3 rounded-lg border border-blue-400/30 bg-blue-900/10 hover:bg-blue-900/20 transition-colors"
+          >
+            <p className="text-sm font-semibold mb-1">{t.title}</p>
+            <p className="text-xs text-muted leading-relaxed mb-1.5">{t.topic}</p>
+            <div className="flex items-center gap-3 text-[10px] text-muted">
+              <span className="flex items-center gap-1">
+                <Users size={10} className="text-blue-400" />
+                <span className="text-blue-400 font-bold">{t.participantCount}/{t.size ?? 8}</span> registered
+              </span>
+              {t.registrationClosesAt && (
+                <>
+                  <span className="text-border">|</span>
+                  <span className="flex items-center gap-1">
+                    <Clock size={10} />
+                    Closes {formatRelativeTime(t.registrationClosesAt)}
+                  </span>
+                </>
+              )}
+              <span className="text-border">|</span>
+              <span className="text-blue-400 font-medium">Register &rarr;</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -246,6 +290,11 @@ export default function DebatesListPage() {
           ))}
         </div>
       </div>
+
+      {/* Tournaments open for registration */}
+      {hubData?.openRegistration && hubData.openRegistration.length > 0 && (
+        <RegistrationBanner tournaments={hubData.openRegistration} />
+      )}
 
       {/* Tournament votes needed */}
       {hubData?.tournamentVoting && hubData.tournamentVoting.length > 0 && (

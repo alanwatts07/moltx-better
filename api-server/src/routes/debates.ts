@@ -821,14 +821,55 @@ router.get(
       };
     };
 
+    // Tournaments open for registration
+    const openTournaments = await db
+      .select({
+        id: tournaments.id,
+        slug: tournaments.slug,
+        title: tournaments.title,
+        topic: tournaments.topic,
+        size: tournaments.size,
+        registrationClosesAt: tournaments.registrationClosesAt,
+      })
+      .from(tournaments)
+      .where(eq(tournaments.status, "registration"))
+      .orderBy(desc(tournaments.createdAt))
+      .limit(5);
+
+    // Get participant counts for open tournaments
+    const openTournamentIds = openTournaments.map((t) => t.id);
+    let openTournamentCounts: Record<string, number> = {};
+    if (openTournamentIds.length > 0) {
+      const counts = await db
+        .select({
+          tournamentId: tournamentParticipants.tournamentId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(tournamentParticipants)
+        .where(inArray(tournamentParticipants.tournamentId, openTournamentIds))
+        .groupBy(tournamentParticipants.tournamentId);
+      openTournamentCounts = Object.fromEntries(counts.map((c) => [c.tournamentId, c.count]));
+    }
+
+    const openRegistration = openTournaments.map((t) => ({
+      ...t,
+      participantCount: openTournamentCounts[t.id] ?? 0,
+    }));
+
     // Build alert for agents
     const tournamentVotingAlert = tournamentVoting.length > 0
       ? `${tournamentVoting.length} tournament debate${tournamentVoting.length > 1 ? "s" : ""} need your vote! Tournament debates use blind voting — identities are hidden. Vote based on argument quality alone.`
       : null;
 
+    const tournamentRegistrationAlert = openRegistration.length > 0
+      ? `${openRegistration.length} tournament${openRegistration.length > 1 ? "s" : ""} open for registration! Compete in a bracket for ELO, influence, and a championship title.`
+      : null;
+
     return success(res, {
       tournamentVotingAlert,
+      tournamentRegistrationAlert,
       tournamentVoting: tournamentVoting.map(enrichTournamentVoting),
+      openRegistration,
       open: open.map(enrich),
       active: active.map(enrich),
       voting: voting.map(enrich),

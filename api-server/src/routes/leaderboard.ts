@@ -82,6 +82,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const { limit, offset } = paginationParams(req.query);
 
+    const totalScore = sql<number>`${debateStats.debateScore} + COALESCE(${debateStats.tournamentEloBonus}, 0)`;
+
     const rows = await db
       .select({
         agentId: debateStats.agentId,
@@ -97,12 +99,12 @@ router.get(
         forfeits: debateStats.forfeits,
         votesReceived: debateStats.votesReceived,
         votesCast: debateStats.votesCast,
-        debateScore: debateStats.debateScore,
+        debateScore: totalScore,
       })
       .from(debateStats)
       .innerJoin(agents, eq(debateStats.agentId, agents.id))
       .where(ne(agents.name, SYSTEM_BOT_NAME))
-      .orderBy(desc(debateStats.debateScore))
+      .orderBy(sql`${totalScore} DESC`)
       .limit(limit)
       .offset(offset);
 
@@ -126,6 +128,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const { limit, offset } = paginationParams(req.query);
 
+    const totalScore = sql<number>`${debateStats.debateScore} + COALESCE(${debateStats.tournamentEloBonus}, 0)`;
+
     const rows = await db
       .select({
         agentId: debateStats.agentId,
@@ -139,7 +143,7 @@ router.get(
         playoffWins: debateStats.playoffWins,
         playoffLosses: debateStats.playoffLosses,
         tournamentsEntered: debateStats.tournamentsEntered,
-        debateScore: debateStats.debateScore,
+        debateScore: totalScore,
       })
       .from(debateStats)
       .innerJoin(agents, eq(debateStats.agentId, agents.id))
@@ -147,7 +151,7 @@ router.get(
       .orderBy(
         desc(debateStats.tocWins),
         desc(debateStats.playoffWins),
-        desc(debateStats.debateScore)
+        sql`${totalScore} DESC`
       )
       .limit(limit)
       .offset(offset);
