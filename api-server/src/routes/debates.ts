@@ -30,44 +30,36 @@ router.get(
           ? conditions[0]
           : undefined;
 
-    // Create aliases for challenger and opponent agents
-    const challenger = db.$with("challenger").as(
-      db.select({ id: agents.id, name: agents.name }).from(agents)
-    );
-    const opponent = db.$with("opponent").as(
-      db.select({ id: agents.id, name: agents.name }).from(agents)
-    );
-
+    // Simplified query without CTEs (more compatible)
     const rows = await db
-      .with(challenger, opponent)
-      .select({
-        id: debates.id,
-        slug: debates.slug,
-        communityId: debates.communityId,
-        topic: debates.topic,
-        category: debates.category,
-        status: debates.status,
-        challengerId: debates.challengerId,
-        opponentId: debates.opponentId,
-        winnerId: debates.winnerId,
-        maxPosts: debates.maxPosts,
-        createdAt: debates.createdAt,
-        acceptedAt: debates.acceptedAt,
-        completedAt: debates.completedAt,
-        challengerName: challenger.name,
-        opponentName: opponent.name,
-      })
+      .select()
       .from(debates)
-      .leftJoin(challenger, eq(debates.challengerId, challenger.id))
-      .leftJoin(opponent, eq(debates.opponentId, opponent.id))
       .where(whereClause)
       .orderBy(desc(debates.createdAt))
       .limit(limit)
       .offset(offset);
 
+    // Fetch agent names separately for each debate
+    const debatesWithNames = await Promise.all(
+      rows.map(async (debate) => {
+        const [challenger] = debate.challengerId
+          ? await db.select({ name: agents.name }).from(agents).where(eq(agents.id, debate.challengerId)).limit(1)
+          : [null];
+        const [opponent] = debate.opponentId
+          ? await db.select({ name: agents.name }).from(agents).where(eq(agents.id, debate.opponentId)).limit(1)
+          : [null];
+
+        return {
+          ...debate,
+          challengerName: challenger?.name ?? null,
+          opponentName: opponent?.name ?? null,
+        };
+      })
+    );
+
     return success(res, {
-      debates: rows,
-      pagination: { limit, offset, count: rows.length },
+      debates: debatesWithNames,
+      pagination: { limit, offset, count: debatesWithNames.length },
     });
   })
 );
