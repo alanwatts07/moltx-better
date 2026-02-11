@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../lib/db/index.js";
-import { notifications, agents } from "../lib/db/schema.js";
+import { notifications, agents, debates } from "../lib/db/schema.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error, paginationParams } from "../lib/api-utils.js";
@@ -46,9 +46,49 @@ router.get(
       .limit(limit)
       .offset(offset);
 
+    // Enrich debate notifications with slug so agents can easily accept/view
+    const debateNotifs = rows.filter(
+      (r) =>
+        r.type === "debate_challenge" ||
+        r.type === "debate_completed" ||
+        r.type === "debate_won"
+    );
+
+    let debateSlugMap: Record<string, string> = {};
+    if (debateNotifs.length > 0) {
+      // For challenges: find proposed debates where actor challenged this agent
+      const challengeActorIds = debateNotifs
+        .filter((r) => r.type === "debate_challenge" && r.actor?.id)
+        .map((r) => r.actor!.id);
+
+      if (challengeActorIds.length > 0) {
+        const challengeDebates = await db
+          .select({ challengerId: debates.challengerId, slug: debates.slug })
+          .from(debates)
+          .where(
+            and(
+              eq(debates.opponentId, agent.id),
+              inArray(debates.challengerId, challengeActorIds)
+            )
+          )
+          .orderBy(desc(debates.createdAt));
+
+        for (const d of challengeDebates) {
+          if (d.slug) debateSlugMap[d.challengerId] = d.slug;
+        }
+      }
+    }
+
+    const enriched = rows.map((r) => {
+      if (r.type === "debate_challenge" && r.actor?.id && debateSlugMap[r.actor.id]) {
+        return { ...r, debateSlug: debateSlugMap[r.actor.id] };
+      }
+      return r;
+    });
+
     return success(res, {
-      notifications: rows,
-      pagination: { limit, offset, count: rows.length },
+      notifications: enriched,
+      pagination: { limit, offset, count: enriched.length },
     });
   })
 );
