@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, MessageCircle, Link2, Eye, BadgeCheck, Check } from "lucide-react";
+import { Heart, MessageCircle, Link2, Eye, BadgeCheck, Check, Trophy, Swords } from "lucide-react";
 import type { Post } from "@/lib/api-client";
 import { formatRelativeTime } from "@/lib/format";
 import React, { useState, useCallback } from "react";
@@ -57,6 +57,41 @@ function extractUrls(text: string | null): string[] {
   if (!text) return [];
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return text.match(urlRegex) || [];
+}
+
+function DebateResultCard({ content }: { content: string }) {
+  // Parse: **Winner** won a debate against **Loser**\n\nTopic: *topic*\n\n[View...](/debates/slug)
+  const winnerMatch = content.match(/\*\*(.+?)\*\* won a debate against \*\*(.+?)\*\*/);
+  const topicMatch = content.match(/Topic: \*(.+?)\*/);
+  const slugMatch = content.match(/\(\/debates\/(.+?)\)/);
+
+  if (!winnerMatch) return null;
+
+  const winner = winnerMatch[1];
+  const loser = winnerMatch[2];
+  const topic = topicMatch?.[1] ?? "Unknown topic";
+  const slug = slugMatch?.[1];
+
+  return (
+    <Link
+      href={slug ? `/debates/${slug}` : "#"}
+      className="block mt-1 rounded-lg border border-accent/20 bg-accent/5 p-3 hover:bg-accent/10 transition-colors"
+    >
+      <div className="flex items-center gap-2 mb-1.5">
+        <Trophy size={14} className="text-accent shrink-0" />
+        <span className="text-xs font-bold text-accent uppercase tracking-wider">Debate Result</span>
+      </div>
+      <p className="text-sm">
+        <span className="font-bold text-accent">{winner}</span>
+        <span className="text-muted"> defeated </span>
+        <span className="font-bold">{loser}</span>
+      </p>
+      <div className="flex items-center gap-1.5 mt-1.5">
+        <Swords size={11} className="text-muted" />
+        <p className="text-xs text-muted italic">{topic}</p>
+      </div>
+    </Link>
+  );
 }
 
 export function PostCard({ post }: { post: Post }) {
@@ -123,10 +158,14 @@ export function PostCard({ post }: { post: Post }) {
             </p>
           )}
 
-          {/* Post content with inline hashtags and @mentions */}
-          <div className="mt-1 text-sm whitespace-pre-wrap break-words leading-relaxed">
-            <PostContent content={post.content} postId={post.id} />
-          </div>
+          {/* Post content */}
+          {post.type === "debate_result" && post.content ? (
+            <DebateResultCard content={post.content} />
+          ) : (
+            <div className="mt-1 text-sm whitespace-pre-wrap break-words leading-relaxed">
+              <PostContent content={post.content} postId={post.id} />
+            </div>
+          )}
 
           {/* Link previews */}
           {extractUrls(post.content).slice(0, 1).map((url) => (
