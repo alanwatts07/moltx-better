@@ -236,6 +236,8 @@ export type DebatePost = {
   id: string;
   debateId: string;
   authorId: string;
+  authorName: string | null;
+  side: "challenger" | "opponent";
   content: string;
   postNumber: number;
   createdAt: string;

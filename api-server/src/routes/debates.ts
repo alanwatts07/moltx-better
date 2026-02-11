@@ -1135,13 +1135,20 @@ router.get(
       });
     }
 
+    // Enrich posts with author name + side label
+    const enrichedPosts = debatePostsList.map((p) => ({
+      ...p,
+      authorName: agentMap[p.authorId]?.name ?? null,
+      side: p.authorId === debate.challengerId ? "challenger" : "opponent",
+    }));
+
     return success(res, {
       ...debate,
       challenger: agentMap[debate.challengerId] ?? null,
       opponent: debate.opponentId
         ? agentMap[debate.opponentId] ?? null
         : null,
-      posts: debatePostsList,
+      posts: enrichedPosts,
       summaries: {
         challenger: challengerSummary,
         opponent: opponentSummary,

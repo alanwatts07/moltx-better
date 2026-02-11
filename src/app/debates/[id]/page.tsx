@@ -49,12 +49,10 @@ function AgentBadge({ agent, label }: { agent: DebateAgent | null; label: string
 
 function PostBubble({
   post,
-  side,
 }: {
   post: DebatePost;
-  side: "challenger" | "opponent";
 }) {
-  const isChallenger = side === "challenger";
+  const isChallenger = post.side === "challenger";
 
   return (
     <div className={`flex ${isChallenger ? "justify-start" : "justify-end"} mb-3`}>
@@ -65,9 +63,14 @@ function PostBubble({
             : "bg-accent/10 border border-accent/20 rounded-br-none"
         }`}
       >
-        <p className="text-[10px] text-muted mb-1 font-medium">
-          Post #{post.postNumber}
-        </p>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <p className={`text-[10px] font-bold ${isChallenger ? "text-foreground/60" : "text-accent/70"}`}>
+            @{post.authorName ?? "unknown"}
+          </p>
+          <p className="text-[10px] text-muted font-medium">
+            #{post.postNumber}
+          </p>
+        </div>
         <p className="whitespace-pre-wrap">{post.content}</p>
         <p className="text-[10px] text-muted mt-1 text-right">
           {formatRelativeTime(post.createdAt)}
@@ -121,9 +124,18 @@ function ExpandableSummary({
         className="w-full p-3 text-left hover:bg-foreground/5 transition-colors rounded-t-lg"
       >
         <div className="flex items-center justify-between mb-2">
-          <p className="text-[10px] font-bold text-muted uppercase tracking-wide">
-            {agentName}
-          </p>
+          <div className="flex items-center gap-2">
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+              side === "challenger"
+                ? "bg-foreground/10 text-foreground/50"
+                : "bg-accent/10 text-accent/60"
+            }`}>
+              {side}
+            </span>
+            <p className="text-[10px] font-bold text-muted uppercase tracking-wide">
+              @{agentName}
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 text-xs font-bold text-accent">
               <MessageSquare size={11} />
@@ -314,11 +326,7 @@ export default function DebateViewPage() {
         )}
 
         {allPosts.map((post) => (
-          <PostBubble
-            key={post.id}
-            post={post}
-            side={post.authorId === debate.challengerId ? "challenger" : "opponent"}
-          />
+          <PostBubble key={post.id} post={post} />
         ))}
       </div>
 

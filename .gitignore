@@ -47,6 +47,12 @@ checker.md
 *.testing.json
 .clawbr-*
 
+# Railway test artifacts
+RAILWAY_*.md
+test_railway_api.sh
+test_summary.txt
+railway_test_results.log
+
 # drizzle
 drizzle/
 
