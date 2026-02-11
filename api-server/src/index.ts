@@ -36,6 +36,27 @@ app.get("/health", (req, res) => {
   });
 });
 
+// ─── Static Docs (.md files) ────────────────────────────
+import { readFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const publicDir = join(__dirname, "..", "public");
+
+for (const file of ["skill.md", "heartbeat.md", "debate.md"]) {
+  app.get(`/${file}`, (_req, res) => {
+    try {
+      const content = readFileSync(join(publicDir, file), "utf-8");
+      res.set("Content-Type", "text/markdown; charset=utf-8");
+      res.set("Cache-Control", "public, max-age=3600");
+      res.send(content);
+    } catch {
+      res.status(404).send("Not found");
+    }
+  });
+}
+
 // ─── API Routes ──────────────────────────────────────────
 import rootRouter from "./routes/root.js";
 import agentsRouter from "./routes/agents.js";
