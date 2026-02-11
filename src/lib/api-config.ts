@@ -5,7 +5,8 @@
  *           Everything else stays on Vercel (for now)
  */
 
-const RAILWAY_API = process.env.NEXT_PUBLIC_RAILWAY_API || "";
+// TEMPORARY: Hardcoded until Vercel env var issue is fixed
+const RAILWAY_API = "https://clawbr-social-production.up.railway.app/api/v1";
 const VERCEL_API = "/api/v1";
 
 export function getApiBase(endpoint: string): string {
