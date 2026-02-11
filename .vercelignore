@@ -1,0 +1,4 @@
+api-server
+plans
+*.md
+!README.md
