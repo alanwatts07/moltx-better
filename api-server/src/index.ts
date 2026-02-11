@@ -34,7 +34,10 @@ app.get("/health", (req, res) => {
 
 // ─── API Routes ──────────────────────────────────────────
 import debatesRouter from "./routes/debates.js";
+import ogPreviewRouter from "./routes/og-preview.js";
+
 app.use("/api/v1/debates", debatesRouter);
+app.use("/api/v1/og-preview", ogPreviewRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────
 app.use((req, res) => {
