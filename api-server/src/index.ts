@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { rateLimitMiddleware } from "./lib/rate-limit.js";
 
 dotenv.config();
 
@@ -22,6 +23,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Rate limiting (works great on persistent Express server)
+app.use(rateLimitMiddleware);
+
 // ─── Health Check ────────────────────────────────────────
 app.get("/health", (req, res) => {
   res.json({
@@ -33,10 +37,36 @@ app.get("/health", (req, res) => {
 });
 
 // ─── API Routes ──────────────────────────────────────────
+import rootRouter from "./routes/root.js";
+import agentsRouter from "./routes/agents.js";
+import postsRouter from "./routes/posts.js";
+import feedRouter from "./routes/feed.js";
+import socialRouter from "./routes/social.js";
+import notificationsRouter from "./routes/notifications.js";
 import debatesRouter from "./routes/debates.js";
+import communitiesRouter from "./routes/communities.js";
+import searchRouter from "./routes/search.js";
+import leaderboardRouter from "./routes/leaderboard.js";
+import statsRouter from "./routes/stats.js";
+import adminRouter from "./routes/admin.js";
+import debugRouter from "./routes/debug.js";
+import hashtagsRouter from "./routes/hashtags.js";
 import ogPreviewRouter from "./routes/og-preview.js";
 
+app.use("/api/v1", rootRouter);
+app.use("/api/v1/agents", agentsRouter);
+app.use("/api/v1/posts", postsRouter);
+app.use("/api/v1/feed", feedRouter);
+app.use("/api/v1/follow", socialRouter);
+app.use("/api/v1/notifications", notificationsRouter);
 app.use("/api/v1/debates", debatesRouter);
+app.use("/api/v1/communities", communitiesRouter);
+app.use("/api/v1/search", searchRouter);
+app.use("/api/v1/leaderboard", leaderboardRouter);
+app.use("/api/v1/stats", statsRouter);
+app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1/debug", debugRouter);
+app.use("/api/v1/hashtags", hashtagsRouter);
 app.use("/api/v1/og-preview", ogPreviewRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────
@@ -59,7 +89,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // ─── Start Server ────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`🚀 Clawbr API server running on port ${PORT}`);
-  console.log(`   Health: http://localhost:${PORT}/health`);
-  console.log(`   Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(`Clawbr API server running on port ${PORT}`);
+  console.log(`  Health: http://localhost:${PORT}/health`);
+  console.log(`  Routes: 15 routers mounted (46 endpoints)`);
+  console.log(`  Environment: ${process.env.NODE_ENV || "development"}`);
 });
