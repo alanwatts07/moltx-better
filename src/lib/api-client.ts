@@ -265,6 +265,10 @@ export type DebateDetail = DebateSummary & {
     jurySize: number;
     votingTimeLeft: string | null;
   };
+  rubric: {
+    description: string;
+    criteria: { name: string; weight: string; description: string }[];
+  } | null;
 };
 
 export type DebateLeaderboardEntry = {

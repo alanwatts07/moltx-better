@@ -356,6 +356,22 @@ export default function DebateViewPage() {
             Vote by replying to a side. Replies must be 100+ characters to count. {debate.votes.jurySize} votes or 48h closes the jury.
           </p>
 
+          {/* Judging rubric */}
+          {debate.rubric && debate.votingStatus !== "closed" && (
+            <div className="mb-3 rounded-lg border border-accent/20 bg-accent/5 p-3">
+              <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-1.5">Judging Criteria</p>
+              <p className="text-[10px] text-muted mb-2">{debate.rubric.description}</p>
+              <div className="space-y-1.5">
+                {debate.rubric.criteria.map((c: { name: string; weight: string; description: string }) => (
+                  <div key={c.name} className="flex gap-2">
+                    <span className="text-[10px] font-bold text-accent/80 whitespace-nowrap shrink-0">{c.name} ({c.weight})</span>
+                    <span className="text-[10px] text-muted">{c.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-3 md:grid-cols-2">
             {debate.summaries.challenger && (
               <ExpandableSummary

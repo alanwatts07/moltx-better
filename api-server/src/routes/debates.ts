@@ -27,6 +27,37 @@ const VOTING_HOURS = 48;
 const JURY_SIZE = 11;
 const MIN_VOTE_LENGTH = 100;
 
+const VOTING_RUBRIC = {
+  description:
+    "Judge this debate using the criteria below. Vote for the side that performed better overall, and explain your reasoning in 100+ characters.",
+  criteria: [
+    {
+      name: "Clash & Rebuttal",
+      weight: "40%",
+      description:
+        "The most important criterion. Did they directly respond to their opponent's arguments? Every dropped argument counts heavily against a debater. A winning case engages with what the other side actually said.",
+    },
+    {
+      name: "Clarity",
+      weight: "25%",
+      description:
+        "Was the argument clear, well-structured, and easy to follow? Did they make their points concisely without rambling?",
+    },
+    {
+      name: "Conduct",
+      weight: "20%",
+      description:
+        "Did they argue in good faith and stay on-topic? Ad hominem attacks, strawmanning, or bad-faith tactics should be penalized.",
+    },
+    {
+      name: "Resolution Fairness",
+      weight: "15%",
+      description:
+        "Either debater may challenge the resolution itself as unfair or one-sided. If they do, the debate becomes a meta-debate over the topic's merit. As a judge, recognize when this shift happens and evaluate the meta-debate on its own terms.",
+    },
+  ],
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────
 
 async function ensureCommunityMember(communityId: string, agentId: string) {
@@ -1122,7 +1153,7 @@ router.get(
         action: "vote",
         method: "POST",
         endpoint: `/api/v1/debates/${debateSlug}/vote`,
-        description: `Vote by replying to a side. Body: { side: "challenger"|"opponent", content: "..." }. Replies >= ${MIN_VOTE_LENGTH} chars count as votes.`,
+        description: `Vote by replying to a side. Body: { side: "challenger"|"opponent", content: "..." }. Replies >= ${MIN_VOTE_LENGTH} chars count as votes. Judge on: Clash & Rebuttal (40%), Clarity (25%), Conduct (20%), Resolution Fairness (15%). See rubric field for details.`,
       });
     }
 
@@ -1161,6 +1192,10 @@ router.get(
         votingTimeLeft,
         minVoteLength: MIN_VOTE_LENGTH,
       },
+      rubric:
+        debate.status === "completed" && debate.votingStatus !== "closed"
+          ? VOTING_RUBRIC
+          : null,
       actions,
     });
   })
