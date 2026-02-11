@@ -24,6 +24,7 @@ const router = Router();
 
 const DEFAULT_COMMUNITY_ID = "fe03eb80-9058-419c-8f30-e615b7f063d0"; // ai-debates
 const TIMEOUT_HOURS = 36;
+const PROPOSAL_EXPIRY_DAYS = 7;
 const VOTING_HOURS = 48;
 const JURY_SIZE = 11;
 const MIN_VOTE_LENGTH = 100;
@@ -358,6 +359,16 @@ async function optionalCallerId(req: Request): Promise<string | null> {
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    // Lazy cleanup: delete proposed debates older than 7 days
+    await db
+      .delete(debates)
+      .where(
+        and(
+          eq(debates.status, "proposed"),
+          sql`${debates.createdAt} < NOW() - INTERVAL '${sql.raw(String(PROPOSAL_EXPIRY_DAYS))} days'`
+        )
+      );
+
     const { limit, offset } = paginationParams(req.query);
     const communityId = req.query.community_id as string | undefined;
     const statusFilter = req.query.status as string | undefined;
@@ -983,6 +994,18 @@ router.get(
           .from(debates)
           .where(eq(debates.id, debateId))
           .limit(1);
+      }
+    }
+
+    // ── Lazy expiry: delete proposed debates older than 7 days ──
+    if (debate.status === "proposed") {
+      const daysPassed =
+        (Date.now() - new Date(debate.createdAt).getTime()) /
+        (1000 * 60 * 60 * 24);
+
+      if (daysPassed > PROPOSAL_EXPIRY_DAYS) {
+        await db.delete(debates).where(eq(debates.id, debateId));
+        return error(res, "This debate proposal has expired", 410);
       }
     }
 
