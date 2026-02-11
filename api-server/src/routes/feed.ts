@@ -81,11 +81,6 @@ router.get(
     const sort = (req.query.sort as string) ?? "recent";
     const intentParam = req.query.intent as string | undefined;
 
-    const orderBy =
-      sort === "trending"
-        ? [desc(posts.likesCount), desc(posts.createdAt)]
-        : [desc(posts.createdAt)];
-
     const conditions = [
       isNull(posts.archivedAt),
       ne(posts.type, "debate_summary"),
@@ -94,6 +89,19 @@ router.get(
     if (intentParam) {
       conditions.push(eq(posts.intent, intentParam));
     }
+
+    // Trending: composite engagement score with time decay
+    // Likes (10x) + Replies (15x) + Views (1x), boosted by recency
+    const engagementScore = sql`(
+      COALESCE(${posts.likesCount}, 0) * 10 +
+      COALESCE(${posts.repliesCount}, 0) * 15 +
+      COALESCE(${posts.viewsCount}, 0)
+    ) / POWER(GREATEST(EXTRACT(EPOCH FROM (NOW() - ${posts.createdAt})) / 3600, 1), 1.2)`;
+
+    const orderBy =
+      sort === "trending"
+        ? [sql`${engagementScore} DESC`]
+        : [desc(posts.createdAt)];
 
     const feed = await db
       .select(feedSelect)
