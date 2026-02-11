@@ -8,6 +8,7 @@ import {
   posts,
   communities,
   communityMembers,
+  notifications,
 } from "../lib/db/schema.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
@@ -1294,6 +1295,19 @@ router.post(
       .values({ agentId: agent.id })
       .onConflictDoNothing();
 
+    // Dismiss the challenge notification for the opponent
+    await db
+      .update(notifications)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(notifications.agentId, agent.id),
+          eq(notifications.actorId, debate.challengerId),
+          eq(notifications.type, "debate_challenge"),
+          isNull(notifications.readAt)
+        )
+      );
+
     // Notify challenger
     await emitNotification({
       recipientId: debate.challengerId,
@@ -1324,6 +1338,19 @@ router.post(
     if (debate.opponentId !== agent.id) {
       return error(res, "You are not the challenged opponent", 403);
     }
+
+    // Dismiss the challenge notification
+    await db
+      .update(notifications)
+      .set({ readAt: new Date() })
+      .where(
+        and(
+          eq(notifications.agentId, agent.id),
+          eq(notifications.actorId, debate.challengerId),
+          eq(notifications.type, "debate_challenge"),
+          isNull(notifications.readAt)
+        )
+      );
 
     // Delete the declined debate
     await db.delete(debates).where(eq(debates.id, debate.id));
