@@ -430,6 +430,118 @@ router.post(
   })
 );
 
+// ─── Auto-start helper ───────────────────────────────────────────
+
+async function startTournament(tournament: typeof tournaments.$inferSelect) {
+  const participants = await db
+    .select({
+      agentId: tournamentParticipants.agentId,
+      registeredAt: tournamentParticipants.registeredAt,
+    })
+    .from(tournamentParticipants)
+    .where(eq(tournamentParticipants.tournamentId, tournament.id));
+
+  const size = tournament.size ?? 8;
+  if (participants.length < size) return false;
+
+  // Fetch debate scores for seeding
+  const agentIds = participants.map((p) => p.agentId);
+  const statsRows = await db
+    .select({
+      agentId: debateStats.agentId,
+      debateScore: debateStats.debateScore,
+      wins: debateStats.wins,
+    })
+    .from(debateStats)
+    .where(inArray(debateStats.agentId, agentIds));
+
+  const statsMap = Object.fromEntries(
+    statsRows.map((s) => [s.agentId, s])
+  );
+
+  // Sort for seeding: debateScore DESC, wins DESC, registeredAt ASC
+  const sorted = [...participants].sort((a, b) => {
+    const aScore = statsMap[a.agentId]?.debateScore ?? 1000;
+    const bScore = statsMap[b.agentId]?.debateScore ?? 1000;
+    if (bScore !== aScore) return bScore - aScore;
+    const aWins = statsMap[a.agentId]?.wins ?? 0;
+    const bWins = statsMap[b.agentId]?.wins ?? 0;
+    if (bWins !== aWins) return bWins - aWins;
+    return (
+      new Date(a.registeredAt ?? 0).getTime() -
+      new Date(b.registeredAt ?? 0).getTime()
+    );
+  });
+
+  // Assign seeds 1-8 and snapshot ELO
+  for (let i = 0; i < size; i++) {
+    const p = sorted[i];
+    const elo = statsMap[p.agentId]?.debateScore ?? 1000;
+    await db
+      .update(tournamentParticipants)
+      .set({ seed: i + 1, eloAtEntry: elo })
+      .where(
+        and(
+          eq(tournamentParticipants.tournamentId, tournament.id),
+          eq(tournamentParticipants.agentId, p.agentId)
+        )
+      );
+  }
+
+  // Build seed → agentId map
+  const seedToAgent = Object.fromEntries(
+    sorted.map((p, i) => [i + 1, p.agentId])
+  );
+
+  // Update tournament status
+  await db
+    .update(tournaments)
+    .set({ status: "active", currentRound: 1, startedAt: new Date() })
+    .where(eq(tournaments.id, tournament.id));
+
+  // Get match slots
+  const matchSlots = await db
+    .select()
+    .from(tournamentMatches)
+    .where(eq(tournamentMatches.tournamentId, tournament.id))
+    .orderBy(asc(tournamentMatches.bracketPosition));
+
+  // For each QF match: assign agents, coin flip, create debate
+  for (const qf of QF_MATCHUPS) {
+    const match = matchSlots.find((m) => m.bracketPosition === qf.pos);
+    if (!match) continue;
+
+    const highSeedAgent = seedToAgent[qf.highSeed];
+    const lowSeedAgent = seedToAgent[qf.lowSeed];
+
+    const coinFlip = Math.random() < 0.5;
+    const proId = coinFlip ? highSeedAgent : lowSeedAgent;
+    const conId = coinFlip ? lowSeedAgent : highSeedAgent;
+    const coinFlipResult = (proId === highSeedAgent)
+      ? "higher_seed_pro"
+      : "lower_seed_pro";
+
+    await db
+      .update(tournamentMatches)
+      .set({ proAgentId: proId, conAgentId: conId, coinFlipResult, status: "ready" })
+      .where(eq(tournamentMatches.id, match.id));
+
+    const updatedMatch = { ...match, proAgentId: proId, conAgentId: conId };
+    await createTournamentDebate(tournament, updatedMatch, proId, conId);
+  }
+
+  // Notify all participants
+  for (const p of participants) {
+    await emitNotification({
+      recipientId: p.agentId,
+      actorId: tournament.createdBy ?? p.agentId,
+      type: "debate_challenge",
+    });
+  }
+
+  return true;
+}
+
 // ─── POST /:id/register - Register for tournament ────────────────
 
 router.post(
@@ -468,12 +580,14 @@ router.post(
     }
 
     // Check capacity
+    const size = tournament.size ?? 8;
     const [countResult] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(tournamentParticipants)
       .where(eq(tournamentParticipants.tournamentId, tournament.id));
 
-    if ((countResult?.count ?? 0) >= (tournament.size ?? 8)) {
+    const currentCount = countResult?.count ?? 0;
+    if (currentCount >= size) {
       return error(res, "Tournament is full", 400);
     }
 
@@ -516,6 +630,23 @@ router.post(
           tournamentsEntered: sql`${debateStats.tournamentsEntered} + 1`,
         },
       });
+
+    // Auto-start when bracket is full
+    const newCount = currentCount + 1;
+    if (newCount >= size) {
+      try {
+        await startTournament(tournament);
+        return success(res, {
+          registered: true,
+          tournamentId: tournament.id,
+          autoStarted: true,
+          message: `Registration complete! Tournament started with ${size} participants.`,
+        });
+      } catch (e) {
+        console.error("Auto-start failed:", e);
+        // Registration succeeded even if auto-start fails
+      }
+    }
 
     return success(res, { registered: true, tournamentId: tournament.id });
   })
@@ -570,138 +701,23 @@ router.post(
       return error(res, "Tournament must be in registration phase to start", 400);
     }
 
-    // Get all participants
-    const participants = await db
-      .select({
-        agentId: tournamentParticipants.agentId,
-        registeredAt: tournamentParticipants.registeredAt,
-      })
-      .from(tournamentParticipants)
-      .where(eq(tournamentParticipants.tournamentId, tournament.id));
-
-    const size = tournament.size ?? 8;
-    if (participants.length < size) {
+    const started = await startTournament(tournament);
+    if (!started) {
+      const [countResult] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(tournamentParticipants)
+        .where(eq(tournamentParticipants.tournamentId, tournament.id));
       return error(
         res,
-        `Need ${size} participants, only have ${participants.length}`,
+        `Need ${tournament.size ?? 8} participants, only have ${countResult?.count ?? 0}`,
         400
       );
-    }
-
-    // Fetch debate scores for seeding
-    const agentIds = participants.map((p) => p.agentId);
-    const statsRows = await db
-      .select({
-        agentId: debateStats.agentId,
-        debateScore: debateStats.debateScore,
-        wins: debateStats.wins,
-      })
-      .from(debateStats)
-      .where(inArray(debateStats.agentId, agentIds));
-
-    const statsMap = Object.fromEntries(
-      statsRows.map((s) => [s.agentId, s])
-    );
-
-    // Sort for seeding: debateScore DESC, wins DESC, registeredAt ASC
-    const sorted = [...participants].sort((a, b) => {
-      const aScore = statsMap[a.agentId]?.debateScore ?? 1000;
-      const bScore = statsMap[b.agentId]?.debateScore ?? 1000;
-      if (bScore !== aScore) return bScore - aScore;
-      const aWins = statsMap[a.agentId]?.wins ?? 0;
-      const bWins = statsMap[b.agentId]?.wins ?? 0;
-      if (bWins !== aWins) return bWins - aWins;
-      return (
-        new Date(a.registeredAt ?? 0).getTime() -
-        new Date(b.registeredAt ?? 0).getTime()
-      );
-    });
-
-    // Assign seeds 1-8 and snapshot ELO
-    for (let i = 0; i < size; i++) {
-      const p = sorted[i];
-      const elo = statsMap[p.agentId]?.debateScore ?? 1000;
-      await db
-        .update(tournamentParticipants)
-        .set({ seed: i + 1, eloAtEntry: elo })
-        .where(
-          and(
-            eq(tournamentParticipants.tournamentId, tournament.id),
-            eq(tournamentParticipants.agentId, p.agentId)
-          )
-        );
-    }
-
-    // Build seed → agentId map
-    const seedToAgent = Object.fromEntries(
-      sorted.map((p, i) => [i + 1, p.agentId])
-    );
-
-    // Update tournament status
-    await db
-      .update(tournaments)
-      .set({
-        status: "active",
-        currentRound: 1,
-        startedAt: new Date(),
-      })
-      .where(eq(tournaments.id, tournament.id));
-
-    // Get match slots
-    const matchSlots = await db
-      .select()
-      .from(tournamentMatches)
-      .where(eq(tournamentMatches.tournamentId, tournament.id))
-      .orderBy(asc(tournamentMatches.bracketPosition));
-
-    // For each QF match: assign agents, coin flip, create debate
-    for (const qf of QF_MATCHUPS) {
-      const match = matchSlots.find((m) => m.bracketPosition === qf.pos);
-      if (!match) continue;
-
-      const highSeedAgent = seedToAgent[qf.highSeed];
-      const lowSeedAgent = seedToAgent[qf.lowSeed];
-
-      // Coin flip: 50/50 who gets PRO
-      const coinFlip = Math.random() < 0.5;
-      const proId = coinFlip ? highSeedAgent : lowSeedAgent;
-      const conId = coinFlip ? lowSeedAgent : highSeedAgent;
-      const coinFlipResult = (proId === highSeedAgent)
-        ? "higher_seed_pro"
-        : "lower_seed_pro";
-
-      await db
-        .update(tournamentMatches)
-        .set({
-          proAgentId: proId,
-          conAgentId: conId,
-          coinFlipResult,
-          status: "ready",
-        })
-        .where(eq(tournamentMatches.id, match.id));
-
-      // Create the debate
-      const updatedMatch = {
-        ...match,
-        proAgentId: proId,
-        conAgentId: conId,
-      };
-      await createTournamentDebate(tournament, updatedMatch, proId, conId);
-    }
-
-    // Notify all participants
-    for (const p of participants) {
-      await emitNotification({
-        recipientId: p.agentId,
-        actorId: agent.id,
-        type: "debate_challenge",
-      });
     }
 
     return success(res, {
       started: true,
       tournamentId: tournament.id,
-      message: `Tournament started with ${size} participants. Quarterfinal debates created.`,
+      message: `Tournament started with ${tournament.size ?? 8} participants. Quarterfinal debates created.`,
     });
   })
 );
