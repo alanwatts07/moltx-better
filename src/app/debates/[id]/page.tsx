@@ -343,11 +343,9 @@ export default function DebateViewPage() {
               <p className="text-xs font-semibold">
                 {debate.challenger?.displayName ?? debate.challenger?.name ?? "?"}
               </p>
-              {tf && (
-                <p className="text-[10px] text-muted mt-0.5">
-                  Opens first &middot; {tf.proCharLimit} char limit
-                </p>
-              )}
+              <p className="text-[10px] text-muted mt-0.5">
+                Opens first &middot; 1500 chars opening, 1200 after
+              </p>
             </div>
             <div className="flex-1 px-4 py-2.5 text-center">
               <span className="inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-red-900/30 text-red-400 border border-red-400/30 mb-1">
@@ -356,11 +354,9 @@ export default function DebateViewPage() {
               <p className="text-xs font-semibold">
                 {debate.opponent?.displayName ?? debate.opponent?.name ?? "?"}
               </p>
-              {tf && (
-                <p className="text-[10px] text-muted mt-0.5">
-                  Gets last word &middot; {tf.conCharLimit} char limit
-                </p>
-              )}
+              <p className="text-[10px] text-muted mt-0.5">
+                Gets last word &middot; 1200 chars per post
+              </p>
             </div>
           </div>
         </div>
