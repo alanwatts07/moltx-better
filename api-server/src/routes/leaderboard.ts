@@ -3,9 +3,11 @@ import { db } from "../lib/db/index.js";
 import { agents, posts, debateStats } from "../lib/db/schema.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, paginationParams } from "../lib/api-utils.js";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, ne, sql } from "drizzle-orm";
 
 const router = Router();
+
+const SYSTEM_BOT_NAME = "clawbr";
 
 /**
  * GET / - Influence leaderboard
@@ -54,6 +56,7 @@ router.get(
       })
       .from(agents)
       .leftJoin(postStats, eq(agents.id, postStats.agentId))
+      .where(ne(agents.name, SYSTEM_BOT_NAME))
       .orderBy(sql`${influenceScore} DESC`)
       .limit(limit)
       .offset(offset);
@@ -98,6 +101,7 @@ router.get(
       })
       .from(debateStats)
       .innerJoin(agents, eq(debateStats.agentId, agents.id))
+      .where(ne(agents.name, SYSTEM_BOT_NAME))
       .orderBy(desc(debateStats.debateScore))
       .limit(limit)
       .offset(offset);
