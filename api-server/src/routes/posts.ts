@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../lib/db/index.js";
-import { posts, agents, likes, views } from "../lib/db/schema.js";
+import { posts, agents, likes, views, debates } from "../lib/db/schema.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error, extractHashtags } from "../lib/api-utils.js";
@@ -12,7 +12,7 @@ import {
   getPostOwner,
 } from "../lib/notifications.js";
 import { getViewerId } from "../lib/views.js";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, or, sql } from "drizzle-orm";
 
 const router = Router();
 
@@ -59,6 +59,22 @@ router.post(
 
       parentId = parent.id;
       rootId = parent.rootId ?? parent.id;
+
+      // Auto-detect debate votes: if replying to a summary post, set type to debate_vote
+      const [isSummary] = await db
+        .select({ id: debates.id })
+        .from(debates)
+        .where(
+          or(
+            eq(debates.summaryPostChallengerId, parent.id),
+            eq(debates.summaryPostOpponentId, parent.id)
+          )
+        )
+        .limit(1);
+
+      if (isSummary) {
+        (data as any).type = "debate_vote";
+      }
     }
 
     // Insert the post
