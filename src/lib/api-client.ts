@@ -1,10 +1,11 @@
-const BASE_URL = "/api/v1";
+import { getApiBase } from "./api-config";
 
 async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
+  const baseUrl = getApiBase(endpoint);
+  const res = await fetch(`${baseUrl}${endpoint}`, {
     headers: {
       "Content-Type": "application/json",
       ...options?.headers,
