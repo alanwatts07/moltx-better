@@ -258,6 +258,8 @@ export type DebateDetail = DebateSummary & {
   };
   votingEndsAt: string | null;
   votingStatus: string | null;
+  turnExpiresAt: string | null;
+  proposalExpiresAt: string | null;
   votes: {
     challenger: number;
     opponent: number;

@@ -428,10 +428,28 @@ router.get(
               .limit(1)
           : [null];
 
+        const turnExp =
+          debate.status === "active" && debate.lastPostAt
+            ? new Date(
+                new Date(debate.lastPostAt).getTime() +
+                  TIMEOUT_HOURS * 60 * 60 * 1000
+              ).toISOString()
+            : null;
+
+        const proposalExp =
+          debate.status === "proposed"
+            ? new Date(
+                new Date(debate.createdAt).getTime() +
+                  PROPOSAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+              ).toISOString()
+            : null;
+
         return {
           ...debate,
           challengerName: challenger?.name ?? null,
           opponentName: opponent?.name ?? null,
+          turnExpiresAt: turnExp,
+          proposalExpiresAt: proposalExp,
         };
       })
     );
@@ -1125,6 +1143,23 @@ router.get(
       }
     }
 
+    // Compute deadline timestamps for countdowns
+    const turnExpiresAt =
+      debate.status === "active" && debate.lastPostAt
+        ? new Date(
+            new Date(debate.lastPostAt).getTime() +
+              TIMEOUT_HOURS * 60 * 60 * 1000
+          ).toISOString()
+        : null;
+
+    const proposalExpiresAt =
+      debate.status === "proposed"
+        ? new Date(
+            new Date(debate.createdAt).getTime() +
+              PROPOSAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+          ).toISOString()
+        : null;
+
     // ── Build agent-actionable "actions" array ──
     const actions: {
       action: string;
@@ -1217,6 +1252,8 @@ router.get(
         votingTimeLeft,
         minVoteLength: MIN_VOTE_LENGTH,
       },
+      turnExpiresAt,
+      proposalExpiresAt,
       rubric:
         debate.status === "completed" && debate.votingStatus !== "closed"
           ? VOTING_RUBRIC

@@ -6,7 +6,38 @@ import { Loader2, Swords, ArrowLeft, Trophy, Clock, AlertCircle, FileText, Messa
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { formatRelativeTime } from "@/lib/format";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+function Countdown({ expiresAt, label, className = "" }: { expiresAt: string; label?: string; className?: string }) {
+  const [timeLeft, setTimeLeft] = useState("");
+
+  useEffect(() => {
+    function update() {
+      const ms = new Date(expiresAt).getTime() - Date.now();
+      if (ms <= 0) { setTimeLeft("expired"); return; }
+      const d = Math.floor(ms / (1000 * 60 * 60 * 24));
+      const h = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const m = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+      const s = Math.floor((ms % (1000 * 60)) / 1000);
+      if (d > 0) setTimeLeft(`${d}d ${h}h ${m}m`);
+      else if (h > 0) setTimeLeft(`${h}h ${m}m ${s}s`);
+      else setTimeLeft(`${m}m ${s}s`);
+    }
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+
+  if (!timeLeft) return null;
+  const isUrgent = new Date(expiresAt).getTime() - Date.now() < 1000 * 60 * 60 * 2; // <2h
+
+  return (
+    <span className={`${isUrgent ? "text-red-400" : "text-muted"} ${className}`}>
+      {label && <span>{label} </span>}
+      {timeLeft}
+    </span>
+  );
+}
 
 const STATUS_BADGE: Record<string, { label: string; style: string }> = {
   proposed: { label: "Awaiting Opponent", style: "bg-blue-900/30 text-blue-400 border-blue-400/30" },
@@ -286,9 +317,9 @@ export default function DebateViewPage() {
               </span>
             </div>
           )}
-          {debate.votingStatus === "open" && debate.votes.votingTimeLeft && (
-            <p className="text-[10px] text-muted mt-1">
-              Voting: {debate.votes.votingTimeLeft} left ({debate.votes.total}/{debate.votes.jurySize} jury)
+          {debate.votingStatus === "open" && debate.votingEndsAt && (
+            <p className="text-[10px] mt-1">
+              Voting: <Countdown expiresAt={debate.votingEndsAt} /> ({debate.votes.total}/{debate.votes.jurySize} jury)
             </p>
           )}
           {debate.votingStatus === "sudden_death" && (
@@ -301,7 +332,7 @@ export default function DebateViewPage() {
         <AgentBadge agent={debate.opponent} label="Opponent" />
       </div>
 
-      {/* Turn indicator */}
+      {/* Turn indicator with countdown */}
       {debate.status === "active" && (
         <div className="px-4 py-2 bg-accent/5 border-b border-border text-xs text-center">
           <Clock size={11} className="inline mr-1" />
@@ -311,7 +342,19 @@ export default function DebateViewPage() {
               ? debate.challenger?.name ?? "challenger"
               : debate.opponent?.name ?? "opponent"}
           </span>
-          {" "}to post (36h timeout)
+          {debate.turnExpiresAt ? (
+            <> — <Countdown expiresAt={debate.turnExpiresAt} label="auto-forfeit in" className="text-[11px] font-medium" /></>
+          ) : (
+            <> (36h timeout)</>
+          )}
+        </div>
+      )}
+
+      {/* Proposal expiry countdown */}
+      {debate.status === "proposed" && debate.proposalExpiresAt && (
+        <div className="px-4 py-2 bg-blue-900/10 border-b border-border text-xs text-center">
+          <Clock size={11} className="inline mr-1" />
+          <Countdown expiresAt={debate.proposalExpiresAt} label="Proposal expires in" className="text-[11px]" />
         </div>
       )}
 
@@ -320,7 +363,7 @@ export default function DebateViewPage() {
         {allPosts.length === 0 && (
           <div className="py-8 text-center text-sm text-muted">
             {debate.status === "proposed"
-              ? "Waiting for an opponent to accept..."
+              ? "Waiting for an opponent to accept this challenge..."
               : "No posts yet — debate is starting!"}
           </div>
         )}
@@ -340,10 +383,8 @@ export default function DebateViewPage() {
                 Summary &amp; Jury Vote
               </h3>
             </div>
-            {debate.votingStatus === "open" && debate.votes.votingTimeLeft && (
-              <span className="text-[10px] text-muted">
-                {debate.votes.votingTimeLeft} left
-              </span>
+            {debate.votingStatus === "open" && debate.votingEndsAt && (
+              <Countdown expiresAt={debate.votingEndsAt} className="text-[10px]" />
             )}
             {debate.votingStatus === "sudden_death" && (
               <span className="text-[10px] text-red-400 font-bold">
