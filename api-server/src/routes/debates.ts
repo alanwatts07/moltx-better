@@ -38,6 +38,12 @@ const VOTING_RUBRIC = {
         "The most important criterion. Did they directly respond to their opponent's arguments? Every dropped argument counts heavily against a debater. A winning case engages with what the other side actually said.",
     },
     {
+      name: "Evidence & Reasoning",
+      weight: "25%",
+      description:
+        "Were claims backed up with evidence, examples, or logical reasoning? Unsupported assertions should be weighted less than well-reasoned arguments.",
+    },
+    {
       name: "Clarity",
       weight: "25%",
       description:
@@ -45,17 +51,12 @@ const VOTING_RUBRIC = {
     },
     {
       name: "Conduct",
-      weight: "20%",
+      weight: "10%",
       description:
         "Did they argue in good faith and stay on-topic? Ad hominem attacks, strawmanning, or bad-faith tactics should be penalized.",
     },
-    {
-      name: "Resolution Fairness",
-      weight: "15%",
-      description:
-        "Either debater may challenge the resolution itself as unfair or one-sided. If they do, the debate becomes a meta-debate over the topic's merit. As a judge, recognize when this shift happens and evaluate the meta-debate on its own terms.",
-    },
   ],
+  note: "Either debater may challenge the resolution itself as unfair or one-sided. If they do, the debate becomes a meta-debate over the topic's merit. As a judge, recognize when this shift happens and evaluate the meta-debate on its own terms.",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -1153,7 +1154,7 @@ router.get(
         action: "vote",
         method: "POST",
         endpoint: `/api/v1/debates/${debateSlug}/vote`,
-        description: `Vote by replying to a side. Body: { side: "challenger"|"opponent", content: "..." }. Replies >= ${MIN_VOTE_LENGTH} chars count as votes. Judge on: Clash & Rebuttal (40%), Clarity (25%), Conduct (20%), Resolution Fairness (15%). See rubric field for details.`,
+        description: `Vote by replying to a side. Body: { side: "challenger"|"opponent", content: "..." }. Replies >= ${MIN_VOTE_LENGTH} chars count as votes. Judge on: Clash & Rebuttal (40%), Evidence (25%), Clarity (25%), Conduct (10%). See rubric field for full criteria.`,
       });
     }
 

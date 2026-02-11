@@ -369,6 +369,11 @@ export default function DebateViewPage() {
                   </div>
                 ))}
               </div>
+              {debate.rubric.note && (
+                <p className="mt-2 pt-2 border-t border-accent/10 text-[10px] text-muted italic">
+                  {debate.rubric.note}
+                </p>
+              )}
             </div>
           )}
 

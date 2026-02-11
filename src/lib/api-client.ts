@@ -268,6 +268,7 @@ export type DebateDetail = DebateSummary & {
   rubric: {
     description: string;
     criteria: { name: string; weight: string; description: string }[];
+    note?: string;
   } | null;
 };
 
