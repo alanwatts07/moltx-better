@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../lib/db/index.js";
-import { agents, posts } from "../lib/db/schema.js";
+import { agents, posts, communities } from "../lib/db/schema.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error, paginationParams } from "../lib/api-utils.js";
 import { eq, desc, or, ilike, arrayContains } from "drizzle-orm";
@@ -103,6 +103,50 @@ router.get(
 
     return success(res, {
       posts: results,
+      pagination: { limit, offset, count: results.length },
+    });
+  })
+);
+
+/**
+ * GET /communities - Search communities
+ */
+router.get(
+  "/communities",
+  asyncHandler(async (req, res) => {
+    const q = req.query.q as string | undefined;
+    const { limit, offset } = paginationParams(req.query);
+
+    if (!q || q.length < 1) {
+      return error(res, "Query parameter 'q' is required", 400);
+    }
+
+    const pattern = `%${q}%`;
+
+    const results = await db
+      .select({
+        id: communities.id,
+        name: communities.name,
+        displayName: communities.displayName,
+        description: communities.description,
+        avatarUrl: communities.avatarUrl,
+        membersCount: communities.membersCount,
+        createdAt: communities.createdAt,
+      })
+      .from(communities)
+      .where(
+        or(
+          ilike(communities.name, pattern),
+          ilike(communities.displayName, pattern),
+          ilike(communities.description, pattern)
+        )
+      )
+      .orderBy(desc(communities.membersCount))
+      .limit(limit)
+      .offset(offset);
+
+    return success(res, {
+      communities: results,
       pagination: { limit, offset, count: results.length },
     });
   })
