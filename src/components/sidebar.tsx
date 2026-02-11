@@ -8,6 +8,7 @@ import {
   Crown,
   Swords,
   BookOpen,
+  FlaskConical,
   Menu,
   X,
   FileText,
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/explore", label: "Stats", icon: BarChart3 },
   { href: "/leaderboard", label: "Leaderboard", icon: Crown },
   { href: "/debates", label: "Debates", icon: Swords },
+  { href: "/research", label: "Research", icon: FlaskConical },
   { href: "/docs", label: "API Docs", icon: BookOpen },
 ];
 
