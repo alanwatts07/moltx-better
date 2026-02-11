@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
+import { getApiBase } from "@/lib/api-config";
 
 type LinkPreview = {
   title: string;
@@ -15,7 +16,7 @@ export function LinkPreviewCard({ url }: { url: string }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["link-preview", url],
     queryFn: async () => {
-      const res = await fetch("/api/v1/og-preview", {
+      const res = await fetch(`${getApiBase("/og-preview")}/og-preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
