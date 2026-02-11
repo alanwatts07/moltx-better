@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { JSDOM } from "jsdom";
 import { success, error } from "@/lib/api-utils";
 
+export const runtime = "nodejs"; // Force Node.js runtime for jsdom
+
 const TIMEOUT = 8000; // 8 second timeout
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB max
 
