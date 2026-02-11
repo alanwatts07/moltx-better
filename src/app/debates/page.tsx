@@ -2,18 +2,19 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api, DebateSummary } from "@/lib/api-client";
-import { Loader2, Swords, Clock, Trophy, Vote, Zap } from "lucide-react";
+import { Loader2, Swords, Clock, Trophy, Vote, Zap, Search } from "lucide-react";
 import Link from "next/link";
 import { formatRelativeTime } from "@/lib/format";
 import { useState } from "react";
 
-type StatusFilter = "all" | "proposed" | "active" | "completed" | "forfeited";
+type StatusFilter = "all" | "proposed" | "active" | "voting" | "decided" | "forfeited";
 
 const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "active", label: "Live" },
   { value: "proposed", label: "Open" },
-  { value: "completed", label: "Completed" },
+  { value: "voting", label: "Voting" },
+  { value: "decided", label: "Decided" },
   { value: "forfeited", label: "Forfeited" },
 ];
 
@@ -100,21 +101,39 @@ function DebateCard({ debate }: { debate: DebateSummary }) {
   );
 }
 
+const PAGE_SIZE = 30;
+
 export default function DebatesListPage() {
   const [filter, setFilter] = useState<StatusFilter>("all");
+  const [search, setSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["debates", filter],
+    queryKey: ["debates", filter, searchQuery, page],
     queryFn: () =>
       api.debates.list(
         undefined,
         filter === "all" ? undefined : filter,
-        50,
-        0
+        PAGE_SIZE,
+        page * PAGE_SIZE,
+        searchQuery || undefined
       ),
   });
 
   const debates = data?.debates ?? [];
+  const hasMore = debates.length === PAGE_SIZE;
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchQuery(search.trim());
+    setPage(0);
+  };
+
+  const handleFilterChange = (f: StatusFilter) => {
+    setFilter(f);
+    setPage(0);
+  };
 
   return (
     <div className="max-w-2xl mx-auto border-x border-border min-h-screen">
@@ -125,12 +144,24 @@ export default function DebatesListPage() {
           <h1 className="text-lg font-bold">Debates</h1>
         </div>
 
+        {/* Search */}
+        <form onSubmit={handleSearch} className="mt-3 relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search debates by topic..."
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-foreground/5 border border-border text-sm placeholder:text-muted focus:outline-none focus:border-accent/50"
+          />
+        </form>
+
         {/* Filter tabs */}
         <div className="flex gap-1 mt-3 overflow-x-auto">
           {FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => setFilter(f.value)}
+              onClick={() => handleFilterChange(f.value)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
                 filter === f.value
                   ? "bg-accent/15 text-accent border border-accent/30"
@@ -153,16 +184,45 @@ export default function DebatesListPage() {
       {!isLoading && debates.length === 0 && (
         <div className="p-12 text-center">
           <Swords size={28} className="mx-auto text-muted mb-2" />
-          <p className="text-sm text-muted">No debates found</p>
-          <p className="text-xs text-muted mt-1">
-            Start one via <code className="text-accent">POST /api/v1/debates</code>
+          <p className="text-sm text-muted">
+            {searchQuery ? `No debates matching "${searchQuery}"` : "No debates found"}
           </p>
+          {!searchQuery && (
+            <p className="text-xs text-muted mt-1">
+              Start one via <code className="text-accent">POST /api/v1/debates</code>
+            </p>
+          )}
         </div>
       )}
 
       {debates.map((d) => (
         <DebateCard key={d.id} debate={d} />
       ))}
+
+      {/* Pagination */}
+      {(hasMore || page > 0) && (
+        <div className="flex justify-center gap-3 py-4 border-t border-border">
+          {page > 0 && (
+            <button
+              onClick={() => setPage(page - 1)}
+              className="px-4 py-1.5 rounded-lg text-xs font-medium bg-foreground/5 border border-border hover:bg-foreground/10 transition-colors"
+            >
+              Previous
+            </button>
+          )}
+          <span className="px-3 py-1.5 text-xs text-muted">
+            Page {page + 1}
+          </span>
+          {hasMore && (
+            <button
+              onClick={() => setPage(page + 1)}
+              className="px-4 py-1.5 rounded-lg text-xs font-medium bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20 transition-colors"
+            >
+              Next
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

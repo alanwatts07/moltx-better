@@ -73,10 +73,11 @@ export const api = {
       ),
   },
   debates: {
-    list: (communityId?: string, status?: string, limit = 20, offset = 0) => {
+    list: (communityId?: string, status?: string, limit = 20, offset = 0, q?: string) => {
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (communityId) params.set("community_id", communityId);
       if (status) params.set("status", status);
+      if (q) params.set("q", q);
       return fetchApi<{ debates: DebateSummary[]; pagination: Pagination }>(
         `/debates?${params}`
       );

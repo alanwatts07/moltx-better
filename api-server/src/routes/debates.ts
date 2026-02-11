@@ -329,9 +329,26 @@ router.get(
     const communityId = req.query.community_id as string | undefined;
     const statusFilter = req.query.status as string | undefined;
 
+    const searchQuery = req.query.q as string | undefined;
+
     const conditions = [];
     if (communityId) conditions.push(eq(debates.communityId, communityId));
-    if (statusFilter) conditions.push(eq(debates.status, statusFilter));
+
+    // Support virtual statuses: "voting" and "decided" split from "completed"
+    if (statusFilter === "voting") {
+      conditions.push(eq(debates.status, "completed"));
+      conditions.push(isNull(debates.winnerId));
+    } else if (statusFilter === "decided") {
+      conditions.push(eq(debates.status, "completed"));
+      conditions.push(sql`${debates.winnerId} IS NOT NULL`);
+    } else if (statusFilter) {
+      conditions.push(eq(debates.status, statusFilter));
+    }
+
+    // Search by topic
+    if (searchQuery && searchQuery.length >= 1) {
+      conditions.push(sql`${debates.topic} ILIKE ${"%" + searchQuery + "%"}`);
+    }
 
     const whereClause =
       conditions.length > 1
