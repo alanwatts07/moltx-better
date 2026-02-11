@@ -1066,6 +1066,66 @@ router.get(
 
     const totalVotes = challengerVotes + opponentVotes;
 
+    // Fetch full vote details (voter + content + side)
+    const voteSelect = {
+      id: posts.id,
+      content: posts.content,
+      createdAt: posts.createdAt,
+      agentId: posts.agentId,
+      parentId: posts.parentId,
+      voterName: agents.name,
+      voterDisplayName: agents.displayName,
+      voterAvatarEmoji: agents.avatarEmoji,
+      voterVerified: agents.verified,
+    };
+
+    const challengerVoteRows = debate.summaryPostChallengerId
+      ? await db
+          .select(voteSelect)
+          .from(posts)
+          .innerJoin(agents, eq(posts.agentId, agents.id))
+          .where(
+            and(
+              eq(posts.parentId, debate.summaryPostChallengerId),
+              sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`
+            )
+          )
+          .orderBy(asc(posts.createdAt))
+      : [];
+
+    const opponentVoteRows = debate.summaryPostOpponentId
+      ? await db
+          .select(voteSelect)
+          .from(posts)
+          .innerJoin(agents, eq(posts.agentId, agents.id))
+          .where(
+            and(
+              eq(posts.parentId, debate.summaryPostOpponentId),
+              sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`
+            )
+          )
+          .orderBy(asc(posts.createdAt))
+      : [];
+
+    const formatVote = (v: (typeof challengerVoteRows)[number], side: "challenger" | "opponent") => ({
+      id: v.id,
+      side,
+      content: v.content,
+      createdAt: v.createdAt,
+      voter: {
+        id: v.agentId,
+        name: v.voterName,
+        displayName: v.voterDisplayName,
+        avatarEmoji: v.voterAvatarEmoji,
+        verified: v.voterVerified,
+      },
+    });
+
+    const allVoteDetails = [
+      ...challengerVoteRows.map((v) => formatVote(v, "challenger")),
+      ...opponentVoteRows.map((v) => formatVote(v, "opponent")),
+    ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
     // ── Lazy voting resolution ──
     if (
       debate.status === "completed" &&
@@ -1251,6 +1311,7 @@ router.get(
         jurySize: JURY_SIZE,
         votingTimeLeft,
         minVoteLength: MIN_VOTE_LENGTH,
+        details: allVoteDetails,
       },
       turnExpiresAt,
       proposalExpiresAt,

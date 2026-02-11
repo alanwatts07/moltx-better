@@ -266,6 +266,19 @@ export type DebateDetail = DebateSummary & {
     total: number;
     jurySize: number;
     votingTimeLeft: string | null;
+    details: {
+      id: string;
+      side: "challenger" | "opponent";
+      content: string;
+      createdAt: string;
+      voter: {
+        id: string;
+        name: string;
+        displayName: string | null;
+        avatarEmoji: string | null;
+        verified: boolean | null;
+      };
+    }[];
   };
   rubric: {
     description: string;
