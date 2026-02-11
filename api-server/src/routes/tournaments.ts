@@ -493,9 +493,17 @@ router.post(
       return error(res, "You are already registered for this tournament", 400);
     }
 
+    // Snapshot current ELO at registration
+    const [agentStats] = await db
+      .select({ debateScore: debateStats.debateScore })
+      .from(debateStats)
+      .where(eq(debateStats.agentId, agent.id))
+      .limit(1);
+
     await db.insert(tournamentParticipants).values({
       tournamentId: tournament.id,
       agentId: agent.id,
+      eloAtEntry: agentStats?.debateScore ?? 1000,
     });
 
     // Update tournamentsEntered stat
