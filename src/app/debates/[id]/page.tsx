@@ -100,13 +100,16 @@ function AgentBadge({ agent, label, blind }: { agent: DebateAgent | null; label:
 function PostBubble({
   post,
   blindVoting,
+  isTournament,
 }: {
   post: DebatePost;
   blindVoting?: boolean;
+  isTournament?: boolean;
 }) {
   const isChallenger = post.side === "challenger";
+  const sideTag = isChallenger ? "PRO" : "CON";
   const displayName = blindVoting
-    ? (isChallenger ? "PRO" : "CON")
+    ? sideTag
     : (post.authorName ?? "unknown");
 
   return (
@@ -120,6 +123,11 @@ function PostBubble({
       >
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className={`text-[10px] font-bold ${isChallenger ? "text-foreground/60" : "text-accent/70"}`}>
+            {isTournament && !blindVoting && (
+              <span className={`mr-1.5 px-1 py-px rounded text-[9px] font-black ${
+                isChallenger ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"
+              }`}>{sideTag}</span>
+            )}
             {blindVoting ? displayName : `@${displayName}`}
           </p>
           <p className="text-[10px] text-muted font-medium">
@@ -297,7 +305,13 @@ export default function DebateViewPage() {
   );
 
   const isBlind = debate.blindVoting === true;
+  const isTournament = !!debate.tournamentMatchId;
   const tc = debate.tournamentContext;
+  const tf = debate.tournamentFormat;
+
+  // For tournament debates, always use PRO/CON labels (even before blind voting kicks in)
+  const challengerLabel = isTournament ? "PRO" : "Challenger";
+  const opponentLabel = isTournament ? "CON" : "Opponent";
 
   return (
     <div className="max-w-3xl mx-auto border-x border-border min-h-screen">
@@ -316,6 +330,40 @@ export default function DebateViewPage() {
             </span>
           )}
         </Link>
+      )}
+
+      {/* Tournament side assignment — make it crystal clear */}
+      {isTournament && debate.status === "active" && (
+        <div className="border-b border-border bg-foreground/[0.03]">
+          <div className="flex divide-x divide-border">
+            <div className="flex-1 px-4 py-2.5 text-center">
+              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-blue-900/30 text-blue-400 border border-blue-400/30 mb-1">
+                PRO — For the Resolution
+              </span>
+              <p className="text-xs font-semibold">
+                {debate.challenger?.displayName ?? debate.challenger?.name ?? "?"}
+              </p>
+              {tf && (
+                <p className="text-[10px] text-muted mt-0.5">
+                  Opens first &middot; {tf.proCharLimit} char limit
+                </p>
+              )}
+            </div>
+            <div className="flex-1 px-4 py-2.5 text-center">
+              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-red-900/30 text-red-400 border border-red-400/30 mb-1">
+                CON — Against the Resolution
+              </span>
+              <p className="text-xs font-semibold">
+                {debate.opponent?.displayName ?? debate.opponent?.name ?? "?"}
+              </p>
+              {tf && (
+                <p className="text-[10px] text-muted mt-0.5">
+                  Gets last word &middot; {tf.conCharLimit} char limit
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Header */}
@@ -342,7 +390,7 @@ export default function DebateViewPage() {
 
       {/* Debaters + Scores */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-foreground/[0.02]">
-        <AgentBadge agent={debate.challenger} label={isBlind ? "PRO" : "Challenger"} blind={isBlind} />
+        <AgentBadge agent={debate.challenger} label={challengerLabel} blind={isBlind} />
 
         <div className="text-center px-4">
           <div className="flex items-center gap-3 text-lg font-bold">
@@ -373,7 +421,7 @@ export default function DebateViewPage() {
           )}
         </div>
 
-        <AgentBadge agent={debate.opponent} label={isBlind ? "CON" : "Opponent"} blind={isBlind} />
+        <AgentBadge agent={debate.opponent} label={opponentLabel} blind={isBlind} />
       </div>
 
       {/* Turn indicator with countdown */}
@@ -382,6 +430,13 @@ export default function DebateViewPage() {
           <Clock size={11} className="inline mr-1" />
           Waiting for{" "}
           <span className="text-accent font-medium">
+            {isTournament && (
+              <span className={`mr-1 px-1 py-px rounded text-[9px] font-black ${
+                debate.currentTurn === debate.challengerId ? "bg-blue-900/30 text-blue-400" : "bg-red-900/30 text-red-400"
+              }`}>
+                {debate.currentTurn === debate.challengerId ? "PRO" : "CON"}
+              </span>
+            )}
             {debate.currentTurn === debate.challengerId
               ? debate.challenger?.name ?? "challenger"
               : debate.opponent?.name ?? "opponent"}
@@ -389,7 +444,7 @@ export default function DebateViewPage() {
           {debate.turnExpiresAt ? (
             <> — <Countdown expiresAt={debate.turnExpiresAt} label="auto-forfeit in" className="text-[11px] font-medium" /></>
           ) : (
-            <> (36h timeout)</>
+            <> ({isTournament ? "24h" : "36h"} timeout)</>
           )}
         </div>
       )}
@@ -413,7 +468,7 @@ export default function DebateViewPage() {
         )}
 
         {allPosts.map((post) => (
-          <PostBubble key={post.id} post={post} blindVoting={isBlind} />
+          <PostBubble key={post.id} post={post} blindVoting={isBlind} isTournament={isTournament} />
         ))}
       </div>
 
