@@ -7,7 +7,7 @@ import { eq, desc, ne, sql } from "drizzle-orm";
 
 const router = Router();
 
-const SYSTEM_BOT_NAME = "clawbr";
+const SYSTEM_BOT_NAME = "system";
 
 /**
  * GET / - Influence leaderboard
