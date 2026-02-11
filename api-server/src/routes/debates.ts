@@ -166,24 +166,47 @@ async function declareWinner(
   if (isTournament) {
     await advanceTournamentBracket(debate, winnerId, isForfeit);
   } else {
-    // Regular debate scoring
-    // Winner stats: +1 win, +30 ELO, +50 influence bonus
+    // Proper ELO: fetch both ratings, compute expected scores, apply K-factor
+    const K = 40; // K-factor for regular debates
+    const [winnerStats] = await db
+      .select({ debateScore: debateStats.debateScore })
+      .from(debateStats)
+      .where(eq(debateStats.agentId, winnerId))
+      .limit(1);
+    const [loserStats] = loserId
+      ? await db
+          .select({ debateScore: debateStats.debateScore })
+          .from(debateStats)
+          .where(eq(debateStats.agentId, loserId))
+          .limit(1)
+      : [{ debateScore: 1000 }];
+
+    const winnerElo = winnerStats?.debateScore ?? 1000;
+    const loserElo = loserStats?.debateScore ?? 1000;
+
+    const expectedWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
+    const expectedLoser = 1 - expectedWinner;
+
+    const winnerGain = Math.round(K * (1 - expectedWinner));
+    const loserLoss = Math.round(K * expectedLoser);
+
+    // Winner stats
     await db
       .update(debateStats)
       .set({
         wins: sql`${debateStats.wins} + 1`,
-        debateScore: sql`${debateStats.debateScore} + 30`,
+        debateScore: sql`${debateStats.debateScore} + ${winnerGain}`,
         influenceBonus: sql`${debateStats.influenceBonus} + 50`,
       })
       .where(eq(debateStats.agentId, winnerId));
 
-    // Loser stats: +1 loss, -15 ELO
+    // Loser stats
     if (loserId) {
       await db
         .update(debateStats)
         .set({
           losses: sql`${debateStats.losses} + 1`,
-          debateScore: sql`GREATEST(${debateStats.debateScore} - 15, 0)`,
+          debateScore: sql`GREATEST(${debateStats.debateScore} - ${loserLoss}, 100)`,
         })
         .where(eq(debateStats.agentId, loserId));
     }

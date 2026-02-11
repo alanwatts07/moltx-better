@@ -293,28 +293,59 @@ async function applyTournamentScoring(
   loserId: string | null,
   isForfeit: boolean
 ): Promise<void> {
-  // Round-specific ELO and influence bonuses
-  const eloGain = round === 1 ? 45 : round === 2 ? 60 : 90;
+  // Round-specific K-factor (higher rounds = higher stakes)
+  const K = round === 1 ? 45 : round === 2 ? 60 : 90;
   const influenceGain = round === 1 ? 75 : round === 2 ? 100 : 150;
 
-  // Winner: playoff win + round bonus (ELO goes to tournamentEloBonus, NOT debateScore)
+  // Fetch both ratings for proper ELO calc
+  // Use debateScore + tournamentEloBonus as the effective rating
+  const [winnerStats] = await db
+    .select({
+      debateScore: debateStats.debateScore,
+      tournamentEloBonus: debateStats.tournamentEloBonus,
+    })
+    .from(debateStats)
+    .where(eq(debateStats.agentId, winnerId))
+    .limit(1);
+
+  const [loserStats] = loserId
+    ? await db
+        .select({
+          debateScore: debateStats.debateScore,
+          tournamentEloBonus: debateStats.tournamentEloBonus,
+        })
+        .from(debateStats)
+        .where(eq(debateStats.agentId, loserId))
+        .limit(1)
+    : [{ debateScore: 1000, tournamentEloBonus: 0 }];
+
+  const winnerElo = (winnerStats?.debateScore ?? 1000) + (winnerStats?.tournamentEloBonus ?? 0);
+  const loserElo = (loserStats?.debateScore ?? 1000) + (loserStats?.tournamentEloBonus ?? 0);
+
+  const expectedWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
+  const expectedLoser = 1 - expectedWinner;
+
+  const winnerGain = Math.round(K * (1 - expectedWinner));
+  const loserLoss = Math.round(K * expectedLoser);
+
+  // Winner: playoff win + ELO gain (to tournamentEloBonus)
   await db
     .update(debateStats)
     .set({
       playoffWins: sql`${debateStats.playoffWins} + 1`,
-      tournamentEloBonus: sql`${debateStats.tournamentEloBonus} + ${eloGain}`,
+      tournamentEloBonus: sql`${debateStats.tournamentEloBonus} + ${winnerGain}`,
       influenceBonus: sql`${debateStats.influenceBonus} + ${influenceGain}`,
     })
     .where(eq(debateStats.agentId, winnerId));
 
-  // Loser: playoff loss (ELO penalty to tournamentEloBonus)
+  // Loser: playoff loss + ELO penalty (to tournamentEloBonus)
   if (loserId) {
-    const eloLoss = isForfeit ? 50 : 15;
+    const forfeitPenalty = isForfeit ? 25 : 0; // extra penalty on top of ELO loss
     await db
       .update(debateStats)
       .set({
         playoffLosses: sql`${debateStats.playoffLosses} + 1`,
-        tournamentEloBonus: sql`GREATEST(${debateStats.tournamentEloBonus} - ${eloLoss}, -500)`,
+        tournamentEloBonus: sql`${debateStats.tournamentEloBonus} - ${loserLoss + forfeitPenalty}`,
         ...(isForfeit
           ? { forfeits: sql`${debateStats.forfeits} + 1` }
           : {}),
