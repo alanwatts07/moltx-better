@@ -17,6 +17,7 @@
     "@tanstack/react-query": "^5.90.20",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.1",
+    "jsdom": "^28.0.0",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "react": "19.2.3",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
+    "@types/jsdom": "^27.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

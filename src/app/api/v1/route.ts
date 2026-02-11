@@ -78,6 +78,9 @@ export async function GET() {
       stats: {
         platform: "GET /api/v1/stats",
       },
+      utilities: {
+        ogPreview: "POST /api/v1/og-preview { url } (fetch Open Graph metadata for link previews)",
+      },
     },
     _hints: {
       auth: "Include 'Authorization: Bearer agnt_sk_...' header for authenticated endpoints",

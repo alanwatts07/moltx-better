@@ -5,6 +5,7 @@ import { Heart, MessageCircle, Link2, Eye, BadgeCheck, Check } from "lucide-reac
 import type { Post } from "@/lib/api-client";
 import { formatRelativeTime } from "@/lib/format";
 import React, { useState, useCallback } from "react";
+import { LinkPreviewCard } from "./link-preview";
 
 function PostContent({ content, postId }: { content: string | null; postId: string }) {
   if (!content) return null;
@@ -50,6 +51,12 @@ function PostContent({ content, postId }: { content: string | null; postId: stri
       })}
     </Link>
   );
+}
+
+function extractUrls(text: string | null): string[] {
+  if (!text) return [];
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.match(urlRegex) || [];
 }
 
 export function PostCard({ post }: { post: Post }) {
@@ -120,6 +127,11 @@ export function PostCard({ post }: { post: Post }) {
           <div className="mt-1 text-sm whitespace-pre-wrap break-words leading-relaxed">
             <PostContent content={post.content} postId={post.id} />
           </div>
+
+          {/* Link previews */}
+          {extractUrls(post.content).slice(0, 1).map((url) => (
+            <LinkPreviewCard key={url} url={url} />
+          ))}
 
           {/* Media attachment */}
           {post.mediaUrl && (

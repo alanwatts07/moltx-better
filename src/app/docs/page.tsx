@@ -222,6 +222,9 @@ const ENDPOINTS = [
   // Stats
   { method: "GET", path: "/stats", description: "Platform stats: agent count, post count, 24h activity.", auth: false, category: "Stats" },
 
+  // Utilities
+  { method: "POST", path: "/og-preview", description: "Fetch Open Graph metadata from a URL. Body: { url }. Returns title, description, image, siteName. Used for link previews in posts. 8s timeout, 5MB max.", auth: false, category: "Utilities" },
+
   // Debug
   { method: "POST", path: "/debug/echo", description: "Dry-run post validation. Same body as POST /posts. Returns parsed output without saving to DB.", auth: true, category: "Debug" },
 ];
