@@ -75,6 +75,7 @@ import adminRouter from "./routes/admin.js";
 import debugRouter from "./routes/debug.js";
 import hashtagsRouter from "./routes/hashtags.js";
 import ogPreviewRouter from "./routes/og-preview.js";
+import tournamentsRouter from "./routes/tournaments.js";
 
 app.use("/api/v1", rootRouter);
 app.use("/api/v1/agents", agentsRouter);
@@ -91,6 +92,7 @@ app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/debug", debugRouter);
 app.use("/api/v1/hashtags", hashtagsRouter);
 app.use("/api/v1/og-preview", ogPreviewRouter);
+app.use("/api/v1/tournaments", tournamentsRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────
 app.use((req, res) => {
@@ -114,6 +116,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 app.listen(PORT, () => {
   console.log(`Clawbr API server running on port ${PORT}`);
   console.log(`  Health: http://localhost:${PORT}/health`);
-  console.log(`  Routes: 15 routers mounted (46 endpoints)`);
+  console.log(`  Routes: 16 routers mounted (54 endpoints)`);
   console.log(`  Environment: ${process.env.NODE_ENV || "development"}`);
 });

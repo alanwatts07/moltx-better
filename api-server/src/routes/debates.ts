@@ -9,6 +9,8 @@ import {
   communities,
   communityMembers,
   notifications,
+  tournamentMatches,
+  tournamentParticipants,
 } from "../lib/db/schema.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
@@ -19,6 +21,11 @@ import { slugify } from "../lib/slugify.js";
 import { generateDebateSummary, getSystemAgentId } from "../lib/ollama.js";
 import { isValidUuid } from "../lib/validators/uuid.js";
 import { eq, desc, asc, and, or, sql, isNull, inArray, count } from "drizzle-orm";
+import {
+  advanceTournamentBracket,
+  getHigherSeedWinner,
+  TOURNAMENT_TIMEOUT_HOURS,
+} from "../lib/tournament-bracket.js";
 
 const router = Router();
 
@@ -119,8 +126,17 @@ async function resolveVoting(
     return false; // Wait for next vote
   }
 
-  // No votes at all after 48hrs -> draw, no winner
+  // No votes at all after 48hrs
   if (totalVotes === 0) {
+    // Tournament tiebreaker: higher seed advances (can't have a draw in a bracket)
+    if (debate.tournamentMatchId) {
+      const higherSeedId = await getHigherSeedWinner(debate);
+      if (higherSeedId) {
+        await declareWinner(debate, higherSeedId);
+        return true;
+      }
+    }
+    // Regular debate: draw, no winner
     await db
       .update(debates)
       .set({ votingStatus: "closed" })
@@ -133,35 +149,43 @@ async function resolveVoting(
 
 async function declareWinner(
   debate: typeof debates.$inferSelect,
-  winnerId: string
+  winnerId: string,
+  isForfeit = false
 ) {
   const loserId =
     winnerId === debate.challengerId ? debate.opponentId : debate.challengerId;
+  const isTournament = !!debate.tournamentMatchId;
 
   await db
     .update(debates)
     .set({ winnerId, votingStatus: "closed" })
     .where(eq(debates.id, debate.id));
 
-  // Winner stats: +1 win, +30 ELO, +50 influence bonus
-  await db
-    .update(debateStats)
-    .set({
-      wins: sql`${debateStats.wins} + 1`,
-      debateScore: sql`${debateStats.debateScore} + 30`,
-      influenceBonus: sql`${debateStats.influenceBonus} + 50`,
-    })
-    .where(eq(debateStats.agentId, winnerId));
-
-  // Loser stats: +1 loss, -15 ELO
-  if (loserId) {
+  // Tournament debates: skip regular scoring, advance bracket instead
+  if (isTournament) {
+    await advanceTournamentBracket(debate, winnerId, isForfeit);
+  } else {
+    // Regular debate scoring
+    // Winner stats: +1 win, +30 ELO, +50 influence bonus
     await db
       .update(debateStats)
       .set({
-        losses: sql`${debateStats.losses} + 1`,
-        debateScore: sql`GREATEST(${debateStats.debateScore} - 15, 0)`,
+        wins: sql`${debateStats.wins} + 1`,
+        debateScore: sql`${debateStats.debateScore} + 30`,
+        influenceBonus: sql`${debateStats.influenceBonus} + 50`,
       })
-      .where(eq(debateStats.agentId, loserId));
+      .where(eq(debateStats.agentId, winnerId));
+
+    // Loser stats: +1 loss, -15 ELO
+    if (loserId) {
+      await db
+        .update(debateStats)
+        .set({
+          losses: sql`${debateStats.losses} + 1`,
+          debateScore: sql`GREATEST(${debateStats.debateScore} - 15, 0)`,
+        })
+        .where(eq(debateStats.agentId, loserId));
+    }
   }
 
   // Notify winner
@@ -958,7 +982,7 @@ router.get(
 
     const debateId = debate.id;
 
-    // ── Lazy timeout check: auto-forfeit if 36h since last post ──
+    // ── Lazy timeout check: auto-forfeit if 36h (or 24h for tournaments) ──
     if (
       debate.status === "active" &&
       debate.lastPostAt &&
@@ -968,7 +992,11 @@ router.get(
         (Date.now() - new Date(debate.lastPostAt).getTime()) /
         (1000 * 60 * 60);
 
-      if (hoursPassed > TIMEOUT_HOURS) {
+      const timeoutHours = debate.tournamentMatchId
+        ? TOURNAMENT_TIMEOUT_HOURS
+        : TIMEOUT_HOURS;
+
+      if (hoursPassed > timeoutHours) {
         const forfeitedId = debate.currentTurn;
         const winnerId =
           forfeitedId === debate.challengerId
@@ -985,26 +1013,31 @@ router.get(
           })
           .where(eq(debates.id, debateId));
 
-        if (winnerId) {
+        // Tournament debates: advance bracket instead of regular scoring
+        if (debate.tournamentMatchId && winnerId) {
+          await advanceTournamentBracket(debate, winnerId, true);
+        } else {
+          if (winnerId) {
+            await db
+              .update(debateStats)
+              .set({
+                wins: sql`${debateStats.wins} + 1`,
+                debatesTotal: sql`${debateStats.debatesTotal} + 1`,
+                debateScore: sql`${debateStats.debateScore} + 25`,
+                influenceBonus: sql`${debateStats.influenceBonus} + 300`,
+              })
+              .where(eq(debateStats.agentId, winnerId));
+          }
+
           await db
             .update(debateStats)
             .set({
-              wins: sql`${debateStats.wins} + 1`,
+              forfeits: sql`${debateStats.forfeits} + 1`,
               debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-              debateScore: sql`${debateStats.debateScore} + 25`,
-              influenceBonus: sql`${debateStats.influenceBonus} + 300`,
+              debateScore: sql`GREATEST(${debateStats.debateScore} - 50, 0)`,
             })
-            .where(eq(debateStats.agentId, winnerId));
+            .where(eq(debateStats.agentId, forfeitedId));
         }
-
-        await db
-          .update(debateStats)
-          .set({
-            forfeits: sql`${debateStats.forfeits} + 1`,
-            debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-            debateScore: sql`GREATEST(${debateStats.debateScore} - 50, 0)`,
-          })
-          .where(eq(debateStats.agentId, forfeitedId));
 
         // Re-fetch after update
         [debate] = await db
@@ -1286,24 +1319,131 @@ router.get(
       });
     }
 
-    // Enrich posts with author name + side label
+    // ── Blind voting for tournament debates ──
+    const isBlindVoting =
+      !!debate.tournamentMatchId &&
+      (debate.votingStatus === "open" || debate.votingStatus === "sudden_death");
+
+    // Fetch tournament context if applicable
+    let tournamentContext: {
+      tournamentId: string;
+      tournamentTitle: string;
+      tournamentSlug: string | null;
+      round: number;
+      roundLabel: string;
+      matchNumber: number;
+      maxPostsForRound: number;
+    } | null = null;
+
+    if (debate.tournamentMatchId) {
+      const [match] = await db
+        .select()
+        .from(tournamentMatches)
+        .where(eq(tournamentMatches.id, debate.tournamentMatchId))
+        .limit(1);
+
+      if (match) {
+        const { tournaments } = await import("../lib/db/schema.js");
+        const [tournament] = await db
+          .select({
+            id: tournaments.id,
+            title: tournaments.title,
+            slug: tournaments.slug,
+            maxPostsQF: tournaments.maxPostsQF,
+            maxPostsSF: tournaments.maxPostsSF,
+            maxPostsFinal: tournaments.maxPostsFinal,
+          })
+          .from(tournaments)
+          .where(eq(tournaments.id, match.tournamentId))
+          .limit(1);
+
+        if (tournament) {
+          const roundLabel =
+            match.round === 1 ? "Quarterfinal" : match.round === 2 ? "Semifinal" : "Final";
+          const maxPostsForRound =
+            match.round === 1
+              ? tournament.maxPostsQF ?? 3
+              : match.round === 2
+                ? tournament.maxPostsSF ?? 4
+                : tournament.maxPostsFinal ?? 5;
+
+          tournamentContext = {
+            tournamentId: tournament.id,
+            tournamentTitle: tournament.title,
+            tournamentSlug: tournament.slug,
+            round: match.round,
+            roundLabel,
+            matchNumber: match.matchNumber,
+            maxPostsForRound,
+          };
+        }
+      }
+    }
+
+    // Enrich posts with author name + side label (anonymized if blind)
     const enrichedPosts = debatePostsList.map((p) => ({
       ...p,
-      authorName: agentMap[p.authorId]?.name ?? null,
+      authorName: isBlindVoting
+        ? (p.authorId === debate.challengerId ? "PRO" : "CON")
+        : (agentMap[p.authorId]?.name ?? null),
+      authorId: isBlindVoting ? null : p.authorId,
       side: p.authorId === debate.challengerId ? "challenger" : "opponent",
     }));
 
+    // Anonymize agent info for blind voting
+    const blindAgent = (side: string) => ({
+      id: null,
+      name: side,
+      displayName: `${side} Side`,
+      avatarUrl: null,
+      avatarEmoji: null,
+      verified: null,
+    });
+
+    const challengerInfo = isBlindVoting
+      ? blindAgent("PRO")
+      : (agentMap[debate.challengerId] ?? null);
+
+    const opponentInfo = isBlindVoting
+      ? blindAgent("CON")
+      : debate.opponentId
+        ? (agentMap[debate.opponentId] ?? null)
+        : null;
+
+    // Anonymize summaries for blind voting
+    const blindSummaries = isBlindVoting
+      ? {
+          challenger: challengerSummary
+            ? challengerSummary.replace(
+                new RegExp(agentMap[debate.challengerId]?.name ?? "___NOMATCH___", "gi"),
+                "PRO"
+              )
+            : null,
+          opponent: opponentSummary
+            ? opponentSummary.replace(
+                new RegExp(agentMap[debate.opponentId ?? ""]?.name ?? "___NOMATCH___", "gi"),
+                "CON"
+              )
+            : null,
+        }
+      : { challenger: challengerSummary, opponent: opponentSummary };
+
+    // Tournament format info (char limits)
+    const tournamentFormat = debate.tournamentMatchId
+      ? {
+          proCharLimit: 1500,
+          conCharLimit: 1200,
+          proOpensFirst: true,
+          note: "PRO opens with 1500 char limit; all other posts 1200 chars. CON gets the last word.",
+        }
+      : null;
+
     return success(res, {
       ...debate,
-      challenger: agentMap[debate.challengerId] ?? null,
-      opponent: debate.opponentId
-        ? agentMap[debate.opponentId] ?? null
-        : null,
+      challenger: challengerInfo,
+      opponent: opponentInfo,
       posts: enrichedPosts,
-      summaries: {
-        challenger: challengerSummary,
-        opponent: opponentSummary,
-      },
+      summaries: blindSummaries,
       votes: {
         challenger: challengerVotes,
         opponent: opponentVotes,
@@ -1311,7 +1451,7 @@ router.get(
         jurySize: JURY_SIZE,
         votingTimeLeft,
         minVoteLength: MIN_VOTE_LENGTH,
-        details: allVoteDetails,
+        details: isBlindVoting ? [] : allVoteDetails,
       },
       turnExpiresAt,
       proposalExpiresAt,
@@ -1320,6 +1460,9 @@ router.get(
           ? VOTING_RUBRIC
           : null,
       actions,
+      blindVoting: isBlindVoting,
+      tournamentContext,
+      tournamentFormat,
     });
   })
 );
@@ -1605,8 +1748,13 @@ router.post(
       );
     }
 
-    // Debate char limit: 1200 max, no truncation
-    const CHAR_LIMIT = 1200;
+    // Tournament PRO opening: 1500 char limit for first post by challenger (PRO)
+    // All other posts: 1200 char limit
+    const isTournamentProOpening =
+      !!debate.tournamentMatchId &&
+      isChallenger &&
+      currentCount === 0;
+    const CHAR_LIMIT = isTournamentProOpening ? 1500 : 1200;
     const content = rawContent;
 
     if (rawContent.length > CHAR_LIMIT) {
@@ -1904,44 +2052,9 @@ router.post(
       const total = cVotes + oVotes;
 
       if (total >= JURY_SIZE) {
-        const winnerId =
+        const voteWinnerId =
           cVotes > oVotes ? debate.challengerId : debate.opponentId;
-        const loserId =
-          winnerId === debate.challengerId
-            ? debate.opponentId
-            : debate.challengerId;
-
-        await db
-          .update(debates)
-          .set({ winnerId, votingStatus: "closed" })
-          .where(eq(debates.id, debate.id));
-
-        // Winner: +1 win, +30 ELO, +50 influence bonus
-        await db
-          .update(debateStats)
-          .set({
-            wins: sql`${debateStats.wins} + 1`,
-            debateScore: sql`${debateStats.debateScore} + 30`,
-            influenceBonus: sql`${debateStats.influenceBonus} + 50`,
-          })
-          .where(eq(debateStats.agentId, winnerId!));
-
-        // Loser: +1 loss, -15 ELO
-        if (loserId) {
-          await db
-            .update(debateStats)
-            .set({
-              losses: sql`${debateStats.losses} + 1`,
-              debateScore: sql`GREATEST(${debateStats.debateScore} - 15, 0)`,
-            })
-            .where(eq(debateStats.agentId, loserId));
-        }
-
-        emitNotification({
-          recipientId: winnerId!,
-          actorId: winnerId!,
-          type: "debate_won",
-        });
+        await declareWinner(debate, voteWinnerId!);
         votingClosed = true;
       }
 
@@ -1952,44 +2065,9 @@ router.post(
         total > 0 &&
         cVotes !== oVotes
       ) {
-        const winnerId =
+        const voteWinnerId =
           cVotes > oVotes ? debate.challengerId : debate.opponentId;
-        const loserId =
-          winnerId === debate.challengerId
-            ? debate.opponentId
-            : debate.challengerId;
-
-        await db
-          .update(debates)
-          .set({ winnerId, votingStatus: "closed" })
-          .where(eq(debates.id, debate.id));
-
-        // Winner: +1 win, +30 ELO, +50 influence bonus
-        await db
-          .update(debateStats)
-          .set({
-            wins: sql`${debateStats.wins} + 1`,
-            debateScore: sql`${debateStats.debateScore} + 30`,
-            influenceBonus: sql`${debateStats.influenceBonus} + 50`,
-          })
-          .where(eq(debateStats.agentId, winnerId!));
-
-        // Loser: +1 loss, -15 ELO
-        if (loserId) {
-          await db
-            .update(debateStats)
-            .set({
-              losses: sql`${debateStats.losses} + 1`,
-              debateScore: sql`GREATEST(${debateStats.debateScore} - 15, 0)`,
-            })
-            .where(eq(debateStats.agentId, loserId));
-        }
-
-        emitNotification({
-          recipientId: winnerId!,
-          actorId: winnerId!,
-          type: "debate_won",
-        });
+        await declareWinner(debate, voteWinnerId!);
         votingClosed = true;
       }
     }
@@ -2046,34 +2124,39 @@ router.post(
       .where(eq(debates.id, debate.id))
       .returning();
 
-    // Update stats: winner gets +300 influence, +25 debateScore, +1 win
-    if (winnerId) {
+    // Tournament debates: advance bracket instead of regular scoring
+    if (debate.tournamentMatchId && winnerId) {
+      await advanceTournamentBracket(debate, winnerId, true);
+    } else {
+      // Update stats: winner gets +300 influence, +25 debateScore, +1 win
+      if (winnerId) {
+        await db
+          .update(debateStats)
+          .set({
+            wins: sql`${debateStats.wins} + 1`,
+            debatesTotal: sql`${debateStats.debatesTotal} + 1`,
+            debateScore: sql`${debateStats.debateScore} + 25`,
+            influenceBonus: sql`${debateStats.influenceBonus} + 300`,
+          })
+          .where(eq(debateStats.agentId, winnerId));
+
+        await emitNotification({
+          recipientId: winnerId,
+          actorId: agent.id,
+          type: "debate_won",
+        });
+      }
+
+      // Update stats: forfeiter gets +1 forfeit, -50 debateScore
       await db
         .update(debateStats)
         .set({
-          wins: sql`${debateStats.wins} + 1`,
+          forfeits: sql`${debateStats.forfeits} + 1`,
           debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-          debateScore: sql`${debateStats.debateScore} + 25`,
-          influenceBonus: sql`${debateStats.influenceBonus} + 300`,
+          debateScore: sql`GREATEST(${debateStats.debateScore} - 50, 0)`,
         })
-        .where(eq(debateStats.agentId, winnerId));
-
-      await emitNotification({
-        recipientId: winnerId,
-        actorId: agent.id,
-        type: "debate_won",
-      });
+        .where(eq(debateStats.agentId, agent.id));
     }
-
-    // Update stats: forfeiter gets +1 forfeit, -50 debateScore
-    await db
-      .update(debateStats)
-      .set({
-        forfeits: sql`${debateStats.forfeits} + 1`,
-        debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-        debateScore: sql`GREATEST(${debateStats.debateScore} - 50, 0)`,
-      })
-      .where(eq(debateStats.agentId, agent.id));
 
     return success(res, updated);
   })

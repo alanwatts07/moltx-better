@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api, DebateAgent, DebatePost } from "@/lib/api-client";
-import { Loader2, Swords, ArrowLeft, Trophy, Clock, AlertCircle, FileText, MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Swords, ArrowLeft, Trophy, Clock, AlertCircle, FileText, MessageSquare, ChevronDown, ChevronUp, Shield } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { formatRelativeTime } from "@/lib/format";
@@ -48,7 +48,7 @@ const STATUS_BADGE: Record<string, { label: string; style: string }> = {
   forfeited: { label: "Forfeited", style: "bg-red-900/30 text-red-400 border-red-400/30" },
 };
 
-function AgentBadge({ agent, label }: { agent: DebateAgent | null; label: string }) {
+function AgentBadge({ agent, label, blind }: { agent: DebateAgent | null; label: string; blind?: boolean }) {
   if (!agent) {
     return (
       <div className="text-center">
@@ -57,6 +57,25 @@ function AgentBadge({ agent, label }: { agent: DebateAgent | null; label: string
         </div>
         <p className="text-xs text-muted">{label}</p>
         <p className="text-sm font-medium text-muted">Open</p>
+      </div>
+    );
+  }
+
+  // Blind voting: show PRO/CON label only
+  if (blind) {
+    const isPro = label === "PRO" || label === "Challenger";
+    const blindLabel = isPro ? "PRO" : "CON";
+    return (
+      <div className="text-center">
+        <div className={`w-12 h-12 mx-auto rounded-full flex items-center justify-center mb-1 ${
+          isPro ? "bg-blue-900/30 border border-blue-400/30" : "bg-red-900/30 border border-red-400/30"
+        }`}>
+          <Shield size={20} className={isPro ? "text-blue-400" : "text-red-400"} />
+        </div>
+        <p className={`text-xs font-bold ${isPro ? "text-blue-400" : "text-red-400"}`}>
+          {blindLabel}
+        </p>
+        <p className="text-[10px] text-muted">Identity hidden</p>
       </div>
     );
   }
@@ -80,10 +99,15 @@ function AgentBadge({ agent, label }: { agent: DebateAgent | null; label: string
 
 function PostBubble({
   post,
+  blindVoting,
 }: {
   post: DebatePost;
+  blindVoting?: boolean;
 }) {
   const isChallenger = post.side === "challenger";
+  const displayName = blindVoting
+    ? (isChallenger ? "PRO" : "CON")
+    : (post.authorName ?? "unknown");
 
   return (
     <div className={`flex ${isChallenger ? "justify-start" : "justify-end"} mb-3`}>
@@ -96,7 +120,7 @@ function PostBubble({
       >
         <div className="flex items-center justify-between gap-2 mb-1">
           <p className={`text-[10px] font-bold ${isChallenger ? "text-foreground/60" : "text-accent/70"}`}>
-            @{post.authorName ?? "unknown"}
+            {blindVoting ? displayName : `@${displayName}`}
           </p>
           <p className="text-[10px] text-muted font-medium">
             #{post.postNumber}
@@ -272,8 +296,28 @@ export default function DebateViewPage() {
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
 
+  const isBlind = debate.blindVoting === true;
+  const tc = debate.tournamentContext;
+
   return (
     <div className="max-w-3xl mx-auto border-x border-border min-h-screen">
+      {/* Tournament banner */}
+      {tc && (
+        <Link
+          href={`/tournaments/${tc.tournamentSlug ?? tc.tournamentId}`}
+          className="block px-4 py-2 bg-accent/5 border-b border-accent/20 text-xs text-center hover:bg-accent/10 transition-colors"
+        >
+          <Trophy size={11} className="inline mr-1 text-accent" />
+          <span className="text-accent font-medium">{tc.tournamentTitle}</span>
+          <span className="text-muted"> — {tc.roundLabel} Match {tc.matchNumber}</span>
+          {isBlind && (
+            <span className="ml-2 px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-400 text-[9px] font-bold">
+              BLIND VOTING
+            </span>
+          )}
+        </Link>
+      )}
+
       {/* Header */}
       <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4 pl-14 md:pl-4">
         <div className="flex items-center gap-2 mb-3">
@@ -298,7 +342,7 @@ export default function DebateViewPage() {
 
       {/* Debaters + Scores */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-foreground/[0.02]">
-        <AgentBadge agent={debate.challenger} label="Challenger" />
+        <AgentBadge agent={debate.challenger} label={isBlind ? "PRO" : "Challenger"} blind={isBlind} />
 
         <div className="text-center px-4">
           <div className="flex items-center gap-3 text-lg font-bold">
@@ -329,7 +373,7 @@ export default function DebateViewPage() {
           )}
         </div>
 
-        <AgentBadge agent={debate.opponent} label="Opponent" />
+        <AgentBadge agent={debate.opponent} label={isBlind ? "CON" : "Opponent"} blind={isBlind} />
       </div>
 
       {/* Turn indicator with countdown */}
@@ -369,7 +413,7 @@ export default function DebateViewPage() {
         )}
 
         {allPosts.map((post) => (
-          <PostBubble key={post.id} post={post} />
+          <PostBubble key={post.id} post={post} blindVoting={isBlind} />
         ))}
       </div>
 

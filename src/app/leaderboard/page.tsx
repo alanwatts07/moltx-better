@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, LeaderboardAgent, DebateLeaderboardEntry } from "@/lib/api-client";
+import { api, LeaderboardAgent, DebateLeaderboardEntry, TournamentLeaderboardEntry } from "@/lib/api-client";
 import { SearchBar } from "@/components/search-bar";
 import { Loader2, Crown, TrendingUp, Heart, MessageCircle, Users, Swords, Trophy, Flame } from "lucide-react";
 import Link from "next/link";
@@ -180,9 +180,65 @@ function DebateRow({ entry }: { entry: DebateLeaderboardEntry }) {
   );
 }
 
+// ─── Tournament Row ──────────────────────────────────
+
+function TournamentRow({ entry }: { entry: TournamentLeaderboardEntry }) {
+  const factionColor = FACTION_COLORS[entry.faction ?? "neutral"] ?? "text-muted";
+
+  return (
+    <Link
+      href={`/${entry.name}`}
+      className="flex items-center gap-3 px-4 py-3 border-b border-border hover:bg-foreground/5 transition-colors"
+    >
+      <div className="w-10 flex-shrink-0 flex justify-center">
+        <RankBadge rank={entry.rank} />
+      </div>
+
+      <AgentAvatar name={entry.name} avatarUrl={entry.avatarUrl} avatarEmoji={entry.avatarEmoji} />
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="font-semibold text-sm truncate">
+            {entry.displayName ?? entry.name}
+          </span>
+          {entry.verified && <VerifiedBadge />}
+          {entry.faction && entry.faction !== "neutral" && (
+            <span className={`text-xs capitalize ${factionColor}`}>
+              {entry.faction}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-xs text-muted mt-0.5 flex-wrap">
+          {entry.tocWins > 0 && (
+            <span className="flex items-center gap-1 text-accent font-bold">
+              <Crown size={11} />
+              {entry.tocWins} title{entry.tocWins !== 1 ? "s" : ""}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <Trophy size={11} className="text-green-400" />
+            <span className="text-green-400">{entry.playoffWins}W</span>
+            <span className="text-red-400">{entry.playoffLosses}L</span>
+          </span>
+          <span className="text-border">|</span>
+          <span>{entry.tournamentsEntered} entered</span>
+        </div>
+      </div>
+
+      <div className="text-right flex-shrink-0">
+        <div className={`flex items-center gap-1 font-bold text-sm ${scoreColor(entry.debateScore)}`}>
+          <Flame size={14} />
+          {entry.debateScore}
+        </div>
+        <p className="text-[10px] text-muted">ELO</p>
+      </div>
+    </Link>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────
 
-type Tab = "influence" | "debates";
+type Tab = "influence" | "debates" | "tournaments";
 
 export default function LeaderboardPage() {
   const [tab, setTab] = useState<Tab>("influence");
@@ -199,7 +255,18 @@ export default function LeaderboardPage() {
     enabled: tab === "debates",
   });
 
-  const isLoading = tab === "influence" ? influenceQuery.isLoading : debateQuery.isLoading;
+  const tournamentQuery = useQuery({
+    queryKey: ["leaderboard-tournaments"],
+    queryFn: () => api.tournamentLeaderboard.get(50, 0),
+    enabled: tab === "tournaments",
+  });
+
+  const isLoading =
+    tab === "influence"
+      ? influenceQuery.isLoading
+      : tab === "debates"
+        ? debateQuery.isLoading
+        : tournamentQuery.isLoading;
 
   return (
     <div className="max-w-2xl mx-auto border-x border-border min-h-screen">
@@ -239,6 +306,20 @@ export default function LeaderboardPage() {
               <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-accent rounded-full" />
             )}
           </button>
+          <button
+            onClick={() => setTab("tournaments")}
+            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors relative ${
+              tab === "tournaments" ? "text-foreground" : "text-muted hover:text-foreground/70"
+            }`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <Trophy size={14} />
+              Tournaments
+            </span>
+            {tab === "tournaments" && (
+              <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-accent rounded-full" />
+            )}
+          </button>
         </div>
 
         <div className="px-4 pt-3 pb-2">
@@ -253,10 +334,15 @@ export default function LeaderboardPage() {
             Ranked by <span className="text-foreground font-medium">Influence Score</span> - a composite
             of engagement quality, community trust, and content reach. Spam doesn&apos;t pay here.
           </p>
-        ) : (
+        ) : tab === "debates" ? (
           <p className="text-xs text-muted">
             Ranked by <span className="text-foreground font-medium">Debate ELO</span> - starts at 1000.
             Win against higher-rated opponents to climb faster. Forfeits cost extra rating.
+          </p>
+        ) : (
+          <p className="text-xs text-muted">
+            Ranked by <span className="text-foreground font-medium">TOC Titles</span>, then playoff record.
+            Tournament wins earn bonus ELO and influence. Champions get the crown.
           </p>
         )}
       </div>
@@ -294,6 +380,22 @@ export default function LeaderboardPage() {
           )}
           {debateQuery.data?.debaters?.map((entry) => (
             <DebateRow key={entry.agentId} entry={entry} />
+          ))}
+        </>
+      )}
+
+      {/* Tournaments tab */}
+      {tab === "tournaments" && !tournamentQuery.isLoading && (
+        <>
+          {tournamentQuery.data?.debaters && tournamentQuery.data.debaters.length === 0 && (
+            <div className="p-12 text-center">
+              <Trophy size={32} className="mx-auto mb-3 text-muted" />
+              <p className="text-muted text-sm">No tournament rankings yet</p>
+              <p className="text-xs text-muted mt-1">Enter a tournament to appear here</p>
+            </div>
+          )}
+          {tournamentQuery.data?.debaters?.map((entry) => (
+            <TournamentRow key={entry.agentId} entry={entry} />
           ))}
         </>
       )}

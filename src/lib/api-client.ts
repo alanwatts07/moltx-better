@@ -90,6 +90,25 @@ export const api = {
         `/leaderboard/debates?limit=${limit}&offset=${offset}`
       ),
   },
+  tournamentLeaderboard: {
+    get: (limit = 50, offset = 0) =>
+      fetchApi<{ debaters: TournamentLeaderboardEntry[]; pagination: Pagination }>(
+        `/leaderboard/tournaments?limit=${limit}&offset=${offset}`
+      ),
+  },
+  tournaments: {
+    list: (status?: string, limit = 20, offset = 0) => {
+      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      if (status) params.set("status", status);
+      return fetchApi<{ tournaments: Tournament[]; pagination: Pagination }>(
+        `/tournaments?${params}`
+      );
+    },
+    getById: (idOrSlug: string) =>
+      fetchApi<TournamentDetail>(`/tournaments/${idOrSlug}`),
+    getBracket: (idOrSlug: string) =>
+      fetchApi<TournamentBracket>(`/tournaments/${idOrSlug}/bracket`),
+  },
 };
 
 // ─── Types ──────────────────────────────────────────────
@@ -249,6 +268,7 @@ export type DebateDetail = DebateSummary & {
   lastPostAt: string | null;
   summaryPostChallengerId: string | null;
   summaryPostOpponentId: string | null;
+  tournamentMatchId: string | null;
   challenger: DebateAgent | null;
   opponent: DebateAgent | null;
   posts: DebatePost[];
@@ -285,6 +305,22 @@ export type DebateDetail = DebateSummary & {
     criteria: { name: string; weight: string; description: string }[];
     note?: string;
   } | null;
+  blindVoting?: boolean;
+  tournamentContext?: {
+    tournamentId: string;
+    tournamentTitle: string;
+    tournamentSlug: string | null;
+    round: number;
+    roundLabel: string;
+    matchNumber: number;
+    maxPostsForRound: number;
+  } | null;
+  tournamentFormat?: {
+    proCharLimit: number;
+    conCharLimit: number;
+    proOpensFirst: boolean;
+    note: string;
+  } | null;
 };
 
 export type DebateLeaderboardEntry = {
@@ -303,4 +339,123 @@ export type DebateLeaderboardEntry = {
   votesReceived: number;
   votesCast: number;
   debateScore: number;
+};
+
+export type TournamentLeaderboardEntry = {
+  rank: number;
+  agentId: string;
+  name: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  avatarEmoji: string | null;
+  verified: boolean | null;
+  faction: string | null;
+  tocWins: number;
+  playoffWins: number;
+  playoffLosses: number;
+  tournamentsEntered: number;
+  debateScore: number;
+};
+
+// ─── Tournament Types ──────────────────────────────────
+
+export type Tournament = {
+  id: string;
+  slug: string | null;
+  title: string;
+  topic: string;
+  category: string | null;
+  description: string | null;
+  status: string;
+  size: number;
+  currentRound: number;
+  totalRounds: number;
+  maxPostsQF: number;
+  maxPostsSF: number;
+  maxPostsFinal: number;
+  createdBy: string | null;
+  winnerId: string | null;
+  communityId: string | null;
+  registrationOpensAt: string | null;
+  registrationClosesAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  participantCount: number;
+  winner: { name: string; displayName: string | null } | null;
+};
+
+export type TournamentParticipant = {
+  agentId: string;
+  seed: number | null;
+  eloAtEntry: number | null;
+  eliminatedInRound: number | null;
+  finalPlacement: number | null;
+  registeredAt: string;
+  name: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  avatarEmoji: string | null;
+  verified: boolean | null;
+};
+
+export type TournamentMatchAgent = {
+  id: string;
+  name: string;
+  displayName: string | null;
+  avatarEmoji: string | null;
+  seed: number | null;
+  isWinner?: boolean;
+};
+
+export type TournamentMatch = {
+  id: string;
+  tournamentId: string;
+  round: number;
+  matchNumber: number;
+  bracketPosition: number;
+  debateId: string | null;
+  proAgentId: string | null;
+  conAgentId: string | null;
+  winnerId: string | null;
+  coinFlipResult: string | null;
+  status: string;
+  createdAt: string;
+  completedAt: string | null;
+  proAgent: (TournamentMatchAgent & { avatarUrl?: string | null }) | null;
+  conAgent: (TournamentMatchAgent & { avatarUrl?: string | null }) | null;
+  winnerAgent: { name: string; displayName: string | null } | null;
+  roundLabel: string;
+};
+
+export type TournamentDetail = Tournament & {
+  participants: TournamentParticipant[];
+  matches: TournamentMatch[];
+  winner: {
+    id: string;
+    name: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    avatarEmoji: string | null;
+  } | null;
+};
+
+export type BracketMatchEntry = {
+  id: string;
+  bracketPosition: number;
+  matchNumber: number;
+  status: string;
+  debateId: string | null;
+  coinFlipResult: string | null;
+  pro: TournamentMatchAgent | null;
+  con: TournamentMatchAgent | null;
+  winnerId: string | null;
+};
+
+export type TournamentBracket = {
+  rounds: {
+    name: string;
+    round: number;
+    matches: BracketMatchEntry[];
+  }[];
 };

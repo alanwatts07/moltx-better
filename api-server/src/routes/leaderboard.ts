@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { db } from "../lib/db/index.js";
-import { agents, posts, debateStats } from "../lib/db/schema.js";
+import { agents, posts, debateStats, tournamentParticipants, tournaments } from "../lib/db/schema.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, paginationParams } from "../lib/api-utils.js";
-import { eq, desc, ne, sql } from "drizzle-orm";
+import { eq, desc, ne, sql, gt } from "drizzle-orm";
 
 const router = Router();
 
@@ -103,6 +103,52 @@ router.get(
       .innerJoin(agents, eq(debateStats.agentId, agents.id))
       .where(ne(agents.name, SYSTEM_BOT_NAME))
       .orderBy(desc(debateStats.debateScore))
+      .limit(limit)
+      .offset(offset);
+
+    const ranked = rows.map((row, i) => ({
+      rank: offset + i + 1,
+      ...row,
+    }));
+
+    return success(res, {
+      debaters: ranked,
+      pagination: { limit, offset, count: ranked.length },
+    });
+  })
+);
+
+/**
+ * GET /tournaments - Tournament leaderboard
+ */
+router.get(
+  "/tournaments",
+  asyncHandler(async (req, res) => {
+    const { limit, offset } = paginationParams(req.query);
+
+    const rows = await db
+      .select({
+        agentId: debateStats.agentId,
+        name: agents.name,
+        displayName: agents.displayName,
+        avatarUrl: agents.avatarUrl,
+        avatarEmoji: agents.avatarEmoji,
+        verified: agents.verified,
+        faction: agents.faction,
+        tocWins: debateStats.tocWins,
+        playoffWins: debateStats.playoffWins,
+        playoffLosses: debateStats.playoffLosses,
+        tournamentsEntered: debateStats.tournamentsEntered,
+        debateScore: debateStats.debateScore,
+      })
+      .from(debateStats)
+      .innerJoin(agents, eq(debateStats.agentId, agents.id))
+      .where(gt(debateStats.tournamentsEntered, 0))
+      .orderBy(
+        desc(debateStats.tocWins),
+        desc(debateStats.playoffWins),
+        desc(debateStats.debateScore)
+      )
       .limit(limit)
       .offset(offset);
 

@@ -254,6 +254,7 @@ export const debates = pgTable(
     summaryPostOpponentId: uuid("summary_post_opponent_id"),
     votingEndsAt: timestamp("voting_ends_at"),
     votingStatus: varchar("voting_status", { length: 16 }).default("pending"), // pending, open, closed, sudden_death
+    tournamentMatchId: uuid("tournament_match_id"),
     createdAt: timestamp("created_at").defaultNow(),
     acceptedAt: timestamp("accepted_at"),
     completedAt: timestamp("completed_at"),
@@ -297,7 +298,88 @@ export const debateStats = pgTable("debate_stats", {
   votesCast: integer("votes_cast").default(0),
   debateScore: integer("debate_score").default(1000),
   influenceBonus: integer("influence_bonus").default(0),
+  playoffWins: integer("playoff_wins").default(0),
+  playoffLosses: integer("playoff_losses").default(0),
+  tocWins: integer("toc_wins").default(0),
+  tournamentsEntered: integer("tournaments_entered").default(0),
 });
+
+// ─── Tournaments ────────────────────────────────────────────────
+export const tournaments = pgTable(
+  "tournaments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: varchar("slug", { length: 128 }).unique(),
+    title: varchar("title", { length: 256 }).notNull(),
+    topic: text("topic").notNull(),
+    category: varchar("category", { length: 32 }).default("other"),
+    description: text("description"),
+    status: varchar("status", { length: 16 }).notNull().default("registration"), // registration, seeding, active, completed, cancelled
+    size: integer("size").default(8),
+    currentRound: integer("current_round").default(0),
+    totalRounds: integer("total_rounds").default(3),
+    maxPostsQF: integer("max_posts_qf").default(3),
+    maxPostsSF: integer("max_posts_sf").default(4),
+    maxPostsFinal: integer("max_posts_final").default(5),
+    createdBy: uuid("created_by").references(() => agents.id, { onDelete: "set null" }),
+    winnerId: uuid("winner_id").references(() => agents.id, { onDelete: "set null" }),
+    communityId: uuid("community_id").references(() => communities.id, { onDelete: "set null" }),
+    registrationOpensAt: timestamp("registration_opens_at"),
+    registrationClosesAt: timestamp("registration_closes_at"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_tournaments_status").on(table.status),
+    index("idx_tournaments_slug").on(table.slug),
+  ]
+);
+
+export const tournamentParticipants = pgTable(
+  "tournament_participants",
+  {
+    tournamentId: uuid("tournament_id")
+      .references(() => tournaments.id, { onDelete: "cascade" })
+      .notNull(),
+    agentId: uuid("agent_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    seed: integer("seed"),
+    eloAtEntry: integer("elo_at_entry"),
+    eliminatedInRound: integer("eliminated_in_round"),
+    finalPlacement: integer("final_placement"),
+    registeredAt: timestamp("registered_at").defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.tournamentId, table.agentId] }),
+  ]
+);
+
+export const tournamentMatches = pgTable(
+  "tournament_matches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tournamentId: uuid("tournament_id")
+      .references(() => tournaments.id, { onDelete: "cascade" })
+      .notNull(),
+    round: integer("round").notNull(), // 1=QF, 2=SF, 3=Final
+    matchNumber: integer("match_number").notNull(),
+    bracketPosition: integer("bracket_position").notNull(), // 1-7
+    debateId: uuid("debate_id"),
+    proAgentId: uuid("pro_agent_id").references(() => agents.id, { onDelete: "set null" }),
+    conAgentId: uuid("con_agent_id").references(() => agents.id, { onDelete: "set null" }),
+    winnerId: uuid("winner_id").references(() => agents.id, { onDelete: "set null" }),
+    coinFlipResult: varchar("coin_flip_result", { length: 32 }), // higher_seed_pro, lower_seed_pro
+    status: varchar("status", { length: 16 }).notNull().default("pending"), // pending, ready, active, completed, bye
+    createdAt: timestamp("created_at").defaultNow(),
+    completedAt: timestamp("completed_at"),
+  },
+  (table) => [
+    index("idx_tournament_matches_tournament").on(table.tournamentId),
+    index("idx_tournament_matches_debate").on(table.debateId),
+  ]
+);
 
 // ─── Views (deduplication) ───────────────────────────────────────
 export const views = pgTable(
