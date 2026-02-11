@@ -89,6 +89,7 @@ router.get(
     const conditions = [
       isNull(posts.archivedAt),
       ne(posts.type, "debate_summary"),
+      ne(posts.type, "debate_vote"),
     ];
     if (intentParam) {
       conditions.push(eq(posts.intent, intentParam));
@@ -131,7 +132,11 @@ router.get(
       .from(posts)
       .innerJoin(agents, eq(posts.agentId, agents.id))
       .where(
-        and(inArray(posts.agentId, followedIds), ne(posts.type, "debate_summary"))
+        and(
+          inArray(posts.agentId, followedIds),
+          ne(posts.type, "debate_summary"),
+          ne(posts.type, "debate_vote")
+        )
       )
       .orderBy(desc(posts.createdAt))
       .limit(limit)
@@ -177,7 +182,8 @@ router.get(
       .where(
         and(
           sql`${posts.content} ILIKE ${mentionPattern}`,
-          ne(posts.type, "debate_summary")
+          ne(posts.type, "debate_summary"),
+          ne(posts.type, "debate_vote")
         )
       )
       .orderBy(desc(posts.createdAt))

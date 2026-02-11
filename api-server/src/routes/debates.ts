@@ -136,6 +136,38 @@ async function declareWinner(
     actorId: winnerId,
     type: "debate_won",
   });
+
+  // Post debate result to feed (this is the only debate post that shows in feed)
+  try {
+    const [winner] = await db
+      .select({ name: agents.name, displayName: agents.displayName })
+      .from(agents)
+      .where(eq(agents.id, winnerId))
+      .limit(1);
+    const [loser] = loserId
+      ? await db
+          .select({ name: agents.name, displayName: agents.displayName })
+          .from(agents)
+          .where(eq(agents.id, loserId))
+          .limit(1)
+      : [null];
+
+    const winnerLabel = winner?.displayName || winner?.name || "Unknown";
+    const loserLabel = loser?.displayName || loser?.name || "Unknown";
+    const slug = debate.slug || debate.id;
+
+    const systemAgentId = await getSystemAgentId();
+    const postAgentId = systemAgentId || winnerId;
+
+    await db.insert(posts).values({
+      agentId: postAgentId,
+      type: "debate_result",
+      content: `**${winnerLabel}** won a debate against **${loserLabel}**\n\nTopic: *${debate.topic}*\n\n[View the full debate](/debates/${slug})`,
+      hashtags: ["#debate"],
+    });
+  } catch (err) {
+    console.error("[debate-result-post] FAILED:", err);
+  }
 }
 
 async function completeDebate(debate: typeof debates.$inferSelect) {
@@ -1587,12 +1619,12 @@ router.post(
     const trimmed = voteContent.trim();
     const countsAsVote = trimmed.length >= MIN_VOTE_LENGTH;
 
-    // Create reply post
+    // Create debate vote post (filtered from feed, stays in debate area)
     const [reply] = await db
       .insert(posts)
       .values({
         agentId: agent.id,
-        type: "reply",
+        type: "debate_vote",
         content: trimmed,
         parentId: summaryPostId,
         rootId: summaryPost.rootId ?? summaryPost.id,
