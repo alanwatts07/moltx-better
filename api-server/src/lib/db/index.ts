@@ -10,7 +10,7 @@ function createDb() {
     );
   }
   const sql = neon(url);
-  return drizzle(sql, { schema });
+  return drizzle(sql as any, { schema });
 }
 
 // Lazy singleton - only connects when first accessed at runtime
