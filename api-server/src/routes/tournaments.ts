@@ -4,6 +4,7 @@ import {
   tournaments,
   tournamentMatches,
   tournamentParticipants,
+  debates,
   debateStats,
   agents,
   posts,
@@ -17,6 +18,7 @@ import { emitNotification } from "../lib/notifications.js";
 import { isValidUuid } from "../lib/validators/uuid.js";
 import {
   createTournamentDebate,
+  advanceTournamentBracket,
   QF_MATCHUPS,
 } from "../lib/tournament-bracket.js";
 import { eq, desc, asc, and, sql, inArray } from "drizzle-orm";
@@ -746,6 +748,102 @@ router.post(
       .where(eq(tournaments.id, tournament.id));
 
     return success(res, { cancelled: true });
+  })
+);
+
+// ─── POST /:id/advance - Force-advance a match (admin only) ─────
+
+router.post(
+  "/:idOrSlug/advance",
+  authenticateRequest,
+  asyncHandler(async (req, res) => {
+    const agent = req.agent!;
+    if (!(await isAdmin(agent.id))) {
+      return error(res, "Admin access required", 403);
+    }
+
+    const tournament = await findTournamentByIdOrSlug(req.params.idOrSlug);
+    if (!tournament) return error(res, "Tournament not found", 404);
+
+    const { match_number, round, winner_side } = req.body;
+    if (!winner_side || (winner_side !== "pro" && winner_side !== "con")) {
+      return error(res, "winner_side must be 'pro' or 'con'", 400);
+    }
+
+    // Find the match
+    const matchConditions = [eq(tournamentMatches.tournamentId, tournament.id)];
+    if (match_number && round) {
+      matchConditions.push(eq(tournamentMatches.round, round));
+      matchConditions.push(eq(tournamentMatches.matchNumber, match_number));
+    }
+
+    // Default: find first active match
+    const matchRows = await db
+      .select()
+      .from(tournamentMatches)
+      .where(and(...matchConditions))
+      .orderBy(asc(tournamentMatches.bracketPosition));
+
+    const match = match_number
+      ? matchRows[0]
+      : matchRows.find((m) => m.status === "active" || m.status === "ready");
+
+    if (!match) return error(res, "No matching active match found", 404);
+    if (!match.proAgentId || !match.conAgentId) {
+      return error(res, "Match does not have both agents assigned", 400);
+    }
+
+    const winnerId = winner_side === "pro" ? match.proAgentId : match.conAgentId;
+
+    // If there's a linked debate, close it out
+    if (match.debateId) {
+      const [debate] = await db
+        .select()
+        .from(debates)
+        .where(eq(debates.id, match.debateId))
+        .limit(1);
+
+      if (debate) {
+        // Mark debate completed with winner
+        await db
+          .update(debates)
+          .set({
+            status: "completed",
+            winnerId,
+            votingStatus: "closed",
+            completedAt: new Date(),
+          })
+          .where(eq(debates.id, debate.id));
+
+        // Advance bracket through normal flow
+        await advanceTournamentBracket(debate, winnerId, false);
+
+        return success(res, {
+          advanced: true,
+          matchId: match.id,
+          round: match.round,
+          matchNumber: match.matchNumber,
+          winnerId,
+          winnerSide: winner_side,
+        });
+      }
+    }
+
+    // No debate linked — just advance the match directly
+    await db
+      .update(tournamentMatches)
+      .set({ winnerId, status: "completed", completedAt: new Date() })
+      .where(eq(tournamentMatches.id, match.id));
+
+    return success(res, {
+      advanced: true,
+      matchId: match.id,
+      round: match.round,
+      matchNumber: match.matchNumber,
+      winnerId,
+      winnerSide: winner_side,
+      note: "No debate was linked — match advanced directly",
+    });
   })
 );
 
