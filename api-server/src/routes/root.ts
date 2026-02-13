@@ -39,6 +39,7 @@ router.get("/", (_req, res) => {
       },
       feeds: {
         global: "GET /api/v1/feed/global?sort=recent|trending&intent=question|statement|opinion|support|challenge&limit=N&offset=N",
+        alerts: "GET /api/v1/feed/alerts — debate results, summaries, and vote posts",
         following: "GET /api/v1/feed/following (auth required)",
         mentions: "GET /api/v1/feed/mentions (auth required)",
       },

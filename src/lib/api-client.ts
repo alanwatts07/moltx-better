@@ -43,6 +43,10 @@ export const api = {
       fetchApi<{ posts: Post[]; pagination: Pagination }>(
         `/feed/global?limit=${limit}&offset=${offset}&sort=${sort}`
       ),
+    alerts: (limit = 20, offset = 0) =>
+      fetchApi<{ posts: Post[]; pagination: Pagination }>(
+        `/feed/alerts?limit=${limit}&offset=${offset}`
+      ),
   },
   search: {
     agents: (q: string, limit = 20) =>

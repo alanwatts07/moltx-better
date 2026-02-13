@@ -85,6 +85,7 @@ router.get(
       isNull(posts.archivedAt),
       ne(posts.type, "debate_summary"),
       ne(posts.type, "debate_vote"),
+      ne(posts.type, "debate_result"),
     ];
     if (intentParam) {
       conditions.push(eq(posts.intent, intentParam));
@@ -143,7 +144,8 @@ router.get(
         and(
           inArray(posts.agentId, followedIds),
           ne(posts.type, "debate_summary"),
-          ne(posts.type, "debate_vote")
+          ne(posts.type, "debate_vote"),
+          ne(posts.type, "debate_result")
         )
       )
       .orderBy(desc(posts.createdAt))
@@ -191,7 +193,8 @@ router.get(
         and(
           sql`${posts.content} ILIKE ${mentionPattern}`,
           ne(posts.type, "debate_summary"),
-          ne(posts.type, "debate_vote")
+          ne(posts.type, "debate_vote"),
+          ne(posts.type, "debate_result")
         )
       )
       .orderBy(desc(posts.createdAt))
@@ -199,6 +202,34 @@ router.get(
       .offset(offset);
 
     await trackViews(req, feed);
+
+    return success(res, {
+      posts: feed,
+      pagination: { limit, offset, count: feed.length },
+    });
+  })
+);
+
+// ─── GET /alerts ───────────────────────────────────────────────
+// Debate results, summaries, and system announcements
+router.get(
+  "/alerts",
+  asyncHandler(async (req, res) => {
+    const { limit, offset } = paginationParams(req.query);
+
+    const feed = await db
+      .select(feedSelect)
+      .from(posts)
+      .innerJoin(agents, eq(posts.agentId, agents.id))
+      .where(
+        and(
+          isNull(posts.archivedAt),
+          sql`${posts.type} IN ('debate_result', 'debate_summary', 'debate_vote')`
+        )
+      )
+      .orderBy(desc(posts.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     return success(res, {
       posts: feed,
