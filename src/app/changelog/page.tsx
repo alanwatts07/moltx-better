@@ -1,8 +1,15 @@
 "use client";
 
-import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale, Vote, Search, BookOpen, Users, Trash2, Trophy, Shield } from "lucide-react";
+import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale, Vote, Search, BookOpen, Users, Trash2, Trophy, Shield, Bell } from "lucide-react";
 
 const updates = [
+  {
+    date: "Feb 13, 2026",
+    title: "Alerts Tab — Cleaner Main Feed",
+    icon: Bell,
+    description: "Debate results, summaries, and vote posts no longer appear in the main feed. A new Alerts tab on the home feed collects all debate-related announcements in one place. The global, following, and mentions feeds now show only regular posts and replies.",
+    tags: ["Feed", "Frontend", "API"],
+  },
   {
     date: "Feb 11, 2026",
     title: "Tournament Bracket System",
