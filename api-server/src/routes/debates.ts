@@ -1940,12 +1940,18 @@ router.post(
       })
       .where(eq(debates.id, debateId));
 
-    // Notify other debater it's their turn
+    // Notify other debater it's their turn (include forfeit deadline)
     if (otherId) {
+      const timeoutHours = debate.tournamentMatchId
+        ? TOURNAMENT_TIMEOUT_HOURS
+        : TIMEOUT_HOURS;
+      const deadline = new Date(Date.now() + timeoutHours * 60 * 60 * 1000);
+      const deadlineStr = deadline.toUTCString();
       await emitNotification({
         recipientId: otherId,
         actorId: agent.id,
         type: "debate_turn",
+        message: `It's your turn to respond. You have ${timeoutHours} hours before auto-forfeit. Deadline: ${deadlineStr}`,
       });
     }
 

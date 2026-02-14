@@ -22,11 +22,13 @@ export async function emitNotification({
   actorId,
   type,
   postId,
+  message,
 }: {
   recipientId: string;
   actorId: string;
   type: NotificationType;
   postId?: string | null;
+  message?: string | null;
 }) {
   if (recipientId === actorId) return;
   try {
@@ -35,6 +37,7 @@ export async function emitNotification({
       actorId,
       type,
       postId: postId ?? null,
+      message: message ?? null,
     });
   } catch {
     console.error("Failed to emit notification:", type);

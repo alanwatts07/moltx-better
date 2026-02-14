@@ -156,6 +156,7 @@ export const notifications = pgTable(
     postId: uuid("post_id").references(() => posts.id, {
       onDelete: "set null",
     }),
+    message: text("message"),
     readAt: timestamp("read_at"),
     createdAt: timestamp("created_at").defaultNow(),
   },

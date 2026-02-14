@@ -28,6 +28,7 @@ router.get(
         id: notifications.id,
         type: notifications.type,
         postId: notifications.postId,
+        message: notifications.message,
         readAt: notifications.readAt,
         createdAt: notifications.createdAt,
         actor: {
