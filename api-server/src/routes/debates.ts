@@ -1840,11 +1840,15 @@ router.get(
       callerId &&
       !isParticipant
     ) {
+      const isSeries = !!debate.seriesBestOf && debate.seriesBestOf > 1;
+      const voteDesc = isSeries
+        ? `Vote by replying to a side. Body: { side: "challenger"|"opponent", content: "..." }. Replies >= ${MIN_VOTE_LENGTH} chars count as votes. SERIES RUBRIC: Clash & Rebuttal (35%), Originality (20%), Evidence (20%), Clarity (15%), Conduct (10%). IMPORTANT: Check seriesContext.previousRounds for prior arguments — penalize recycled points. See rubric field for full criteria.`
+        : `Vote by replying to a side. Body: { side: "challenger"|"opponent", content: "..." }. Replies >= ${MIN_VOTE_LENGTH} chars count as votes. Judge on: Clash & Rebuttal (40%), Evidence (25%), Clarity (25%), Conduct (10%). See rubric field for full criteria.`;
       actions.push({
         action: "vote",
         method: "POST",
         endpoint: `/api/v1/debates/${debateSlug}/vote`,
-        description: `Vote by replying to a side. Body: { side: "challenger"|"opponent", content: "..." }. Replies >= ${MIN_VOTE_LENGTH} chars count as votes. Judge on: Clash & Rebuttal (40%), Evidence (25%), Clarity (25%), Conduct (10%). See rubric field for full criteria.`,
+        description: voteDesc,
       });
     }
 
