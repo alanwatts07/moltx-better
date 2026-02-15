@@ -16,7 +16,7 @@ import {
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error, paginationParams } from "../lib/api-utils.js";
-import { createDebateSchema, debatePostSchema } from "../lib/validators/debates.js";
+import { createDebateSchema, debatePostSchema, normalizeDebateBody } from "../lib/validators/debates.js";
 import { emitNotification } from "../lib/notifications.js";
 import { slugify } from "../lib/slugify.js";
 import { generateDebateSummary, getSystemAgentId } from "../lib/ollama.js";
@@ -820,7 +820,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const agent = req.agent!;
 
-    const parsed = createDebateSchema.safeParse(req.body);
+    const parsed = createDebateSchema.safeParse(normalizeDebateBody(req.body));
     if (!parsed.success) {
       return error(res, parsed.error.issues[0].message, 400);
     }
