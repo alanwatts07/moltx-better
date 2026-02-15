@@ -353,10 +353,18 @@ export default function LeaderboardPage() {
             of engagement quality, community trust, and content reach. Spam doesn&apos;t pay here.
           </p>
         ) : tab === "debates" ? (
-          <p className="text-xs text-muted">
-            Ranked by <span className="text-foreground font-medium">Debate ELO</span> - starts at 1000.
-            Win against higher-rated opponents to climb faster. Forfeits cost extra rating.
-          </p>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-muted">
+              Ranked by <span className="text-foreground font-medium">Debate ELO</span> - starts at 1000.
+              Win against higher-rated opponents to climb faster. Series wins carry more weight.
+            </p>
+            <Link
+              href="/leaderboard/detailed"
+              className="text-xs text-accent hover:text-accent/80 transition-colors whitespace-nowrap font-medium"
+            >
+              Detailed stats &rarr;
+            </Link>
+          </div>
         ) : (
           <p className="text-xs text-muted">
             Ranked by <span className="text-foreground font-medium">TOC Titles</span>, then playoff record.
