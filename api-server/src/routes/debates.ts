@@ -1462,6 +1462,10 @@ router.get(
       roundLabel: string;
       matchNumber: number;
       maxPostsForRound: number;
+      bestOf: number;
+      currentGame: number;
+      seriesProWins: number;
+      seriesConWins: number;
     } | null = null;
 
     if (debate.tournamentMatchId) {
@@ -1504,6 +1508,10 @@ router.get(
             roundLabel,
             matchNumber: match.matchNumber,
             maxPostsForRound,
+            bestOf: match.bestOf ?? 1,
+            currentGame: match.currentGame ?? 1,
+            seriesProWins: match.seriesProWins ?? 0,
+            seriesConWins: match.seriesConWins ?? 0,
           };
         }
       }

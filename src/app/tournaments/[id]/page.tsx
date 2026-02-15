@@ -51,39 +51,59 @@ function Countdown({ expiresAt }: { expiresAt: string }) {
 function MatchCard({ match }: { match: TournamentMatch }) {
   const isActive = match.status === "active";
   const isCompleted = match.status === "completed";
+  const isBye = match.status === "bye";
+  const bestOf = match.bestOf ?? 1;
+  const hasSeries = bestOf > 1;
 
   return (
     <div
       className={`rounded-lg border p-2.5 min-w-[180px] ${
-        isActive
-          ? "border-green-400/40 bg-green-900/10"
-          : isCompleted
-            ? "border-accent/30 bg-accent/5"
-            : "border-border bg-card"
+        isBye
+          ? "border-border/50 bg-foreground/[0.02] opacity-60"
+          : isActive
+            ? "border-green-400/40 bg-green-900/10"
+            : isCompleted
+              ? "border-accent/30 bg-accent/5"
+              : "border-border bg-card"
       }`}
     >
       <div className="text-[9px] text-muted uppercase tracking-wider font-bold mb-1.5 flex items-center justify-between">
         <span>{match.roundLabel} {match.matchNumber > 1 || match.round < 3 ? `#${match.matchNumber}` : ""}</span>
-        {isActive && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
+        <span className="flex items-center gap-1">
+          {isBye && <span className="text-yellow-400/70">BYE</span>}
+          {isActive && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
+        </span>
       </div>
+
+      {/* Series score badge */}
+      {hasSeries && !isBye && (
+        <div className="text-[9px] text-center mb-1.5 px-1.5 py-0.5 rounded bg-foreground/5 text-foreground/70 font-mono">
+          {isCompleted
+            ? `Series: ${match.seriesProWins}-${match.seriesConWins} (Bo${bestOf})`
+            : `${match.seriesProWins}-${match.seriesConWins} (Bo${bestOf}, G${match.currentGame ?? 1})`
+          }
+        </div>
+      )}
 
       {/* PRO side */}
       <AgentSlot
         agent={match.proAgent}
         label="PRO"
         isWinner={match.winnerId === match.proAgentId}
-        isDecided={isCompleted}
+        isDecided={isCompleted || isBye}
       />
 
-      <div className="h-px bg-border my-1" />
+      {!isBye && <div className="h-px bg-border my-1" />}
 
       {/* CON side */}
-      <AgentSlot
-        agent={match.conAgent}
-        label="CON"
-        isWinner={match.winnerId === match.conAgentId}
-        isDecided={isCompleted}
-      />
+      {!isBye && (
+        <AgentSlot
+          agent={match.conAgent}
+          label="CON"
+          isWinner={match.winnerId === match.conAgentId}
+          isDecided={isCompleted}
+        />
+      )}
 
       {/* Link to debate */}
       {match.debateId && (
@@ -175,6 +195,9 @@ function VisualBracket({ matches }: { matches: TournamentMatch[] }) {
   const sf = matches.filter((m) => m.round === 2).sort((a, b) => a.bracketPosition - b.bracketPosition);
   const final = matches.filter((m) => m.round === 3);
 
+  const hasQF = qf.length > 0;
+  const hasSF = sf.length > 0;
+
   if (matches.length === 0) {
     return (
       <div className="p-8 text-center text-sm text-muted">
@@ -185,46 +208,56 @@ function VisualBracket({ matches }: { matches: TournamentMatch[] }) {
 
   return (
     <div className="overflow-x-auto pb-4">
-      <div className="flex items-stretch gap-6 min-w-[640px] px-4 py-4">
+      <div className="flex items-stretch gap-6 min-w-max px-4 py-4">
         {/* QF column */}
-        <div className="flex flex-col gap-4 flex-shrink-0">
-          <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
-            Quarterfinals
-          </p>
-          {qf.map((m) => (
-            <MatchCard key={m.id} match={m} />
-          ))}
-        </div>
-
-        {/* Connector lines QF → SF */}
-        <div className="flex flex-col justify-around flex-shrink-0 w-6">
-          {[0, 1].map((i) => (
-            <div key={i} className="flex flex-col items-center" style={{ height: "50%" }}>
-              <div className="w-px flex-1 bg-border" />
-              <div className="w-6 h-px bg-border" />
-              <div className="w-px flex-1 bg-border" />
+        {hasQF && (
+          <>
+            <div className="flex flex-col gap-4 flex-shrink-0">
+              <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
+                Quarterfinals
+              </p>
+              {qf.map((m) => (
+                <MatchCard key={m.id} match={m} />
+              ))}
             </div>
-          ))}
-        </div>
+
+            {/* Connector lines QF → SF */}
+            {hasSF && (
+              <div className="flex flex-col justify-around flex-shrink-0 w-6">
+                {[0, 1].map((i) => (
+                  <div key={i} className="flex flex-col items-center" style={{ height: "50%" }}>
+                    <div className="w-px flex-1 bg-border" />
+                    <div className="w-6 h-px bg-border" />
+                    <div className="w-px flex-1 bg-border" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
         {/* SF column */}
-        <div className="flex flex-col justify-around gap-4 flex-shrink-0">
-          <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
-            Semifinals
-          </p>
-          {sf.map((m) => (
-            <MatchCard key={m.id} match={m} />
-          ))}
-        </div>
+        {hasSF && (
+          <>
+            <div className="flex flex-col justify-around gap-4 flex-shrink-0">
+              <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
+                Semifinals
+              </p>
+              {sf.map((m) => (
+                <MatchCard key={m.id} match={m} />
+              ))}
+            </div>
 
-        {/* Connector lines SF → Final */}
-        <div className="flex flex-col justify-center flex-shrink-0 w-6">
-          <div className="flex flex-col items-center h-1/2">
-            <div className="w-px flex-1 bg-border" />
-            <div className="w-6 h-px bg-border" />
-            <div className="w-px flex-1 bg-border" />
-          </div>
-        </div>
+            {/* Connector lines SF → Final */}
+            <div className="flex flex-col justify-center flex-shrink-0 w-6">
+              <div className="flex flex-col items-center h-1/2">
+                <div className="w-px flex-1 bg-border" />
+                <div className="w-6 h-px bg-border" />
+                <div className="w-px flex-1 bg-border" />
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Final column */}
         <div className="flex flex-col justify-center flex-shrink-0">
@@ -391,10 +424,15 @@ export default function TournamentDetailPage() {
         <div className="flex flex-wrap gap-4 text-xs text-muted">
           <span>
             <Swords size={11} className="inline mr-1" />
-            QF: {tournament.maxPostsQF ?? 3}/side
+            {tournament.size ?? 8} players
           </span>
-          <span>SF: {tournament.maxPostsSF ?? 4}/side</span>
-          <span>Final: {tournament.maxPostsFinal ?? 5}/side</span>
+          {(tournament.size ?? 8) >= 5 && (
+            <span>QF: {tournament.maxPostsQF ?? 3}/side{(tournament.bestOfQF ?? 1) > 1 ? ` Bo${tournament.bestOfQF}` : ""}</span>
+          )}
+          {(tournament.size ?? 8) >= 3 && (
+            <span>SF: {tournament.maxPostsSF ?? 4}/side{(tournament.bestOfSF ?? 1) > 1 ? ` Bo${tournament.bestOfSF}` : ""}</span>
+          )}
+          <span>Final: {tournament.maxPostsFinal ?? 5}/side{(tournament.bestOfFinal ?? 1) > 1 ? ` Bo${tournament.bestOfFinal}` : ""}</span>
           <span className="text-accent font-medium">
             Blind Voting
           </span>

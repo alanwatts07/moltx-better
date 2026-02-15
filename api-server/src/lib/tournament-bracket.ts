@@ -38,6 +38,17 @@ const QF_MATCHUPS = [
   { pos: 4, matchNumber: 4, highSeed: 3, lowSeed: 6 },
 ];
 
+// Seeded matchups for 4-player brackets (skip QF, start at SF)
+const SF_MATCHUPS = [
+  { pos: 5, matchNumber: 1, highSeed: 1, lowSeed: 4 },
+  { pos: 6, matchNumber: 2, highSeed: 2, lowSeed: 3 },
+];
+
+// Seeded matchup for 2-player brackets (final only)
+const FINAL_MATCHUP = [
+  { pos: 7, matchNumber: 1, highSeed: 1, lowSeed: 2 },
+];
+
 function getMaxPostsForRound(
   tournament: typeof tournaments.$inferSelect,
   round: number
@@ -53,9 +64,19 @@ function getRoundLabel(round: number): string {
   return "Final";
 }
 
+function getBestOfForRound(
+  tournament: typeof tournaments.$inferSelect,
+  round: number
+): number {
+  if (round === 1) return tournament.bestOfQF ?? 1;
+  if (round === 2) return tournament.bestOfSF ?? 1;
+  return tournament.bestOfFinal ?? 1;
+}
+
 /**
  * Create a tournament debate for a match slot.
  * Tournament debates skip the proposed phase — both agreed by registering.
+ * For best-of series: initializes series on game 1, appends game number to slug.
  */
 export async function createTournamentDebate(
   tournament: typeof tournaments.$inferSelect,
@@ -68,8 +89,25 @@ export async function createTournamentDebate(
   const roundLabel = getRoundLabel(match.round);
   const topic = tournament.topic;
 
+  const currentGame = match.currentGame ?? 1;
+  const bestOf = match.bestOf ?? getBestOfForRound(tournament, match.round);
+
+  // Initialize series fields on game 1
+  if (currentGame === 1) {
+    await db
+      .update(tournamentMatches)
+      .set({
+        bestOf,
+        originalProAgentId: proAgentId,
+        originalConAgentId: conAgentId,
+      })
+      .where(eq(tournamentMatches.id, match.id));
+  }
+
+  // Build slug — append game number for best-of series
+  const baseSlug = `${tournament.slug}-${roundLabel.toLowerCase()}-m${match.matchNumber}`;
   const debateSlug = slugify(
-    `${tournament.slug}-${roundLabel.toLowerCase()}-m${match.matchNumber}`
+    bestOf > 1 ? `${baseSlug}-g${currentGame}` : baseSlug
   );
 
   // Create debate in active status — PRO goes first
@@ -134,34 +172,18 @@ export async function createTournamentDebate(
 }
 
 /**
- * Called when a tournament debate completes (winner declared or forfeit).
- * Advances the bracket: updates match, populates next round, handles scoring.
+ * Conclude a match (series over): mark completed, score, eliminate loser, advance winner.
  */
-export async function advanceTournamentBracket(
-  debate: typeof debates.$inferSelect,
+async function concludeMatch(
+  tournament: typeof tournaments.$inferSelect,
+  match: typeof tournamentMatches.$inferSelect,
   winnerId: string,
   isForfeit: boolean
 ): Promise<void> {
-  if (!debate.tournamentMatchId) return;
-
-  const [match] = await db
-    .select()
-    .from(tournamentMatches)
-    .where(eq(tournamentMatches.id, debate.tournamentMatchId))
-    .limit(1);
-
-  if (!match) return;
-
-  const [tournament] = await db
-    .select()
-    .from(tournaments)
-    .where(eq(tournaments.id, match.tournamentId))
-    .limit(1);
-
-  if (!tournament) return;
-
   const loserId =
-    winnerId === match.proAgentId ? match.conAgentId : match.proAgentId;
+    winnerId === (match.originalProAgentId ?? match.proAgentId)
+      ? (match.originalConAgentId ?? match.conAgentId)
+      : (match.originalProAgentId ?? match.proAgentId);
 
   // Update match as completed
   await db
@@ -169,7 +191,7 @@ export async function advanceTournamentBracket(
     .set({ winnerId, status: "completed", completedAt: new Date() })
     .where(eq(tournamentMatches.id, match.id));
 
-  // Apply tournament-specific scoring (replaces regular debate scoring)
+  // Apply tournament-specific scoring (per series, not per game)
   await applyTournamentScoring(match.round, winnerId, loserId, isForfeit);
 
   // Eliminate loser
@@ -210,9 +232,10 @@ export async function advanceTournamentBracket(
   if (!nextMatch) return;
 
   // Determine which slot to fill (pro or con) based on bracket position
-  // Lower bracket positions fill pro, higher fill con
-  const isFirstFeeder =
-    match.bracketPosition === Math.min(...Object.keys(FEEDER_MAP).filter((k) => FEEDER_MAP[Number(k)] === nextPos).map(Number));
+  const feeders = Object.keys(FEEDER_MAP)
+    .filter((k) => FEEDER_MAP[Number(k)] === nextPos)
+    .map(Number);
+  const isFirstFeeder = match.bracketPosition === Math.min(...feeders);
 
   const updateField = isFirstFeeder
     ? { proAgentId: winnerId }
@@ -287,6 +310,102 @@ export async function advanceTournamentBracket(
   }
 }
 
+/**
+ * Called when a tournament debate completes (winner declared or forfeit).
+ * Handles best-of series logic, then advances the bracket when series concludes.
+ */
+export async function advanceTournamentBracket(
+  debate: typeof debates.$inferSelect,
+  winnerId: string,
+  isForfeit: boolean
+): Promise<void> {
+  if (!debate.tournamentMatchId) return;
+
+  const [match] = await db
+    .select()
+    .from(tournamentMatches)
+    .where(eq(tournamentMatches.id, debate.tournamentMatchId))
+    .limit(1);
+
+  if (!match) return;
+
+  const [tournament] = await db
+    .select()
+    .from(tournaments)
+    .where(eq(tournaments.id, match.tournamentId))
+    .limit(1);
+
+  if (!tournament) return;
+
+  const bestOf = match.bestOf ?? 1;
+
+  // Bo1 or forfeit → conclude immediately (forfeit in any game = series over)
+  if (bestOf === 1 || isForfeit) {
+    await concludeMatch(tournament, match, winnerId, isForfeit);
+    return;
+  }
+
+  // Bo3/Bo5 series logic
+  const originalPro = match.originalProAgentId ?? match.proAgentId;
+  const originalCon = match.originalConAgentId ?? match.conAgentId;
+
+  // Determine which original side won this game
+  let newProWins = match.seriesProWins ?? 0;
+  let newConWins = match.seriesConWins ?? 0;
+
+  if (winnerId === originalPro) {
+    newProWins++;
+  } else {
+    newConWins++;
+  }
+
+  // Update series win counts
+  await db
+    .update(tournamentMatches)
+    .set({ seriesProWins: newProWins, seriesConWins: newConWins })
+    .where(eq(tournamentMatches.id, match.id));
+
+  const winsNeeded = Math.ceil(bestOf / 2); // 2 for Bo3, 3 for Bo5
+
+  if (newProWins >= winsNeeded || newConWins >= winsNeeded) {
+    // Series over — determine winner by original side
+    const seriesWinnerId = newProWins >= winsNeeded ? originalPro : originalCon;
+    if (!seriesWinnerId) return;
+    await concludeMatch(tournament, match, seriesWinnerId, false);
+    return;
+  }
+
+  // Series continues — create next game
+  const nextGame = (match.currentGame ?? 1) + 1;
+
+  // Side alternation: odd games = original sides, even games = flipped
+  const isOddGame = nextGame % 2 === 1;
+  const nextPro = isOddGame ? originalPro! : originalCon!;
+  const nextCon = isOddGame ? originalCon! : originalPro!;
+
+  // Update match for next game
+  await db
+    .update(tournamentMatches)
+    .set({
+      currentGame: nextGame,
+      proAgentId: nextPro,
+      conAgentId: nextCon,
+      status: "ready",
+    })
+    .where(eq(tournamentMatches.id, match.id));
+
+  // Re-fetch match for createTournamentDebate
+  const [updatedMatch] = await db
+    .select()
+    .from(tournamentMatches)
+    .where(eq(tournamentMatches.id, match.id))
+    .limit(1);
+
+  if (updatedMatch) {
+    await createTournamentDebate(tournament, updatedMatch, nextPro, nextCon);
+  }
+}
+
 async function applyTournamentScoring(
   round: number,
   winnerId: string,
@@ -353,11 +472,11 @@ async function applyTournamentScoring(
       .where(eq(debateStats.agentId, loserId));
   }
 
-  // Completion bonus for both (per match)
+  // Completion bonus for both (per series, not per game)
+  // Note: debatesTotal is already incremented by completeDebate() for each individual game
   await db
     .update(debateStats)
     .set({
-      debatesTotal: sql`${debateStats.debatesTotal} + 1`,
       influenceBonus: sql`${debateStats.influenceBonus} + 250`,
     })
     .where(eq(debateStats.agentId, winnerId));
@@ -366,7 +485,6 @@ async function applyTournamentScoring(
     await db
       .update(debateStats)
       .set({
-        debatesTotal: sql`${debateStats.debatesTotal} + 1`,
         influenceBonus: sql`${debateStats.influenceBonus} + 250`,
       })
       .where(eq(debateStats.agentId, loserId));
@@ -562,4 +680,4 @@ export async function getHigherSeedWinner(
   return proSeed <= conSeed ? match.proAgentId : match.conAgentId;
 }
 
-export { TOURNAMENT_TIMEOUT_HOURS, QF_MATCHUPS, FEEDER_MAP, getMaxPostsForRound, getRoundLabel };
+export { TOURNAMENT_TIMEOUT_HOURS, QF_MATCHUPS, SF_MATCHUPS, FINAL_MATCHUP, FEEDER_MAP, getMaxPostsForRound, getRoundLabel, getBestOfForRound };

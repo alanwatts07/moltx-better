@@ -20,6 +20,9 @@ import {
   createTournamentDebate,
   advanceTournamentBracket,
   QF_MATCHUPS,
+  SF_MATCHUPS,
+  FINAL_MATCHUP,
+  FEEDER_MAP,
 } from "../lib/tournament-bracket.js";
 import { eq, desc, asc, and, sql, inArray } from "drizzle-orm";
 
@@ -283,30 +286,22 @@ router.get(
       participants.map((p) => [p.agentId, p.seed])
     );
 
+    // Only include rounds that have matches
+    const allRounds = [
+      { name: "Quarterfinals", round: 1 },
+      { name: "Semifinals", round: 2 },
+      { name: "Final", round: 3 },
+    ];
+
     const bracket = {
-      rounds: [
-        {
-          name: "Quarterfinals",
-          round: 1,
+      rounds: allRounds
+        .map((r) => ({
+          ...r,
           matches: matches
-            .filter((m) => m.round === 1)
+            .filter((m) => m.round === r.round)
             .map((m) => formatBracketMatch(m, agentMap, seedMap)),
-        },
-        {
-          name: "Semifinals",
-          round: 2,
-          matches: matches
-            .filter((m) => m.round === 2)
-            .map((m) => formatBracketMatch(m, agentMap, seedMap)),
-        },
-        {
-          name: "Final",
-          round: 3,
-          matches: matches
-            .filter((m) => m.round === 3)
-            .map((m) => formatBracketMatch(m, agentMap, seedMap)),
-        },
-      ],
+        }))
+        .filter((r) => r.matches.length > 0),
     };
 
     return success(res, bracket);
@@ -322,9 +317,14 @@ function formatBracketMatch(
     id: m.id,
     bracketPosition: m.bracketPosition,
     matchNumber: m.matchNumber,
+    round: m.round,
     status: m.status,
     debateId: m.debateId,
     coinFlipResult: m.coinFlipResult,
+    bestOf: m.bestOf ?? 1,
+    currentGame: m.currentGame ?? 1,
+    seriesProWins: m.seriesProWins ?? 0,
+    seriesConWins: m.seriesConWins ?? 0,
     pro: m.proAgentId
       ? {
           id: m.proAgentId,
@@ -366,11 +366,24 @@ router.post(
       max_posts_qf,
       max_posts_sf,
       max_posts_final,
+      size: requestedSize,
+      best_of_qf,
+      best_of_sf,
+      best_of_final,
     } = req.body;
 
     if (!title || !topic) {
       return error(res, "title and topic are required", 400);
     }
+
+    // Validate size (2-8)
+    const size = requestedSize ? Math.max(2, Math.min(8, Math.floor(Number(requestedSize)))) : 8;
+
+    // Validate best-of params (must be 1, 3, or 5)
+    const validBo = [1, 3, 5];
+    const boQF = validBo.includes(best_of_qf) ? best_of_qf : 1;
+    const boSF = validBo.includes(best_of_sf) ? best_of_sf : 1;
+    const boFinal = validBo.includes(best_of_final) ? best_of_final : 1;
 
     const slug = slugify(title);
 
@@ -383,6 +396,7 @@ router.post(
         category: category ?? "other",
         description: description ?? null,
         status: "registration",
+        size,
         createdBy: agent.id,
         communityId: community_id ?? "fe03eb80-9058-419c-8f30-e615b7f063d0",
         registrationOpensAt: new Date(),
@@ -392,19 +406,41 @@ router.post(
         maxPostsQF: max_posts_qf ?? 3,
         maxPostsSF: max_posts_sf ?? 4,
         maxPostsFinal: max_posts_final ?? 5,
+        bestOfQF: boQF,
+        bestOfSF: boSF,
+        bestOfFinal: boFinal,
       })
       .returning();
 
-    // Pre-create 7 match slots: 4 QF (pos 1-4) + 2 SF (pos 5-6) + 1 Final (pos 7)
-    const matchSlots = [
-      { round: 1, matchNumber: 1, bracketPosition: 1 },
-      { round: 1, matchNumber: 2, bracketPosition: 2 },
-      { round: 1, matchNumber: 3, bracketPosition: 3 },
-      { round: 1, matchNumber: 4, bracketPosition: 4 },
-      { round: 2, matchNumber: 1, bracketPosition: 5 },
-      { round: 2, matchNumber: 2, bracketPosition: 6 },
-      { round: 3, matchNumber: 1, bracketPosition: 7 },
-    ];
+    // Generate match slots based on bracket size
+    // Bracket size: 8 for 5-8 players, 4 for 3-4, 2 for 2
+    const bracketSize = size >= 5 ? 8 : size >= 3 ? 4 : 2;
+    const matchSlots: { round: number; matchNumber: number; bracketPosition: number }[] = [];
+
+    if (bracketSize === 8) {
+      // 4 QF + 2 SF + 1 Final
+      matchSlots.push(
+        { round: 1, matchNumber: 1, bracketPosition: 1 },
+        { round: 1, matchNumber: 2, bracketPosition: 2 },
+        { round: 1, matchNumber: 3, bracketPosition: 3 },
+        { round: 1, matchNumber: 4, bracketPosition: 4 },
+        { round: 2, matchNumber: 1, bracketPosition: 5 },
+        { round: 2, matchNumber: 2, bracketPosition: 6 },
+        { round: 3, matchNumber: 1, bracketPosition: 7 },
+      );
+    } else if (bracketSize === 4) {
+      // 2 SF + 1 Final
+      matchSlots.push(
+        { round: 2, matchNumber: 1, bracketPosition: 5 },
+        { round: 2, matchNumber: 2, bracketPosition: 6 },
+        { round: 3, matchNumber: 1, bracketPosition: 7 },
+      );
+    } else {
+      // 1 Final only
+      matchSlots.push(
+        { round: 3, matchNumber: 1, bracketPosition: 7 },
+      );
+    }
 
     await db.insert(tournamentMatches).values(
       matchSlots.map((slot) => ({
@@ -421,7 +457,7 @@ router.post(
       await db.insert(posts).values({
         agentId: postAgentId,
         type: "post",
-        content: `**New Tournament: ${title}**\n\nTopic: *${topic}*\n\nRegistration is now open! 8 debaters will compete in a bracket to determine the champion.\n\n[Register now](/tournaments/${slug})`,
+        content: `**New Tournament: ${title}**\n\nTopic: *${topic}*\n\nRegistration is now open! ${size} debaters will compete in a bracket to determine the champion.\n\n[Register now](/tournaments/${slug})`,
         hashtags: ["#tournament"],
       });
     } catch {
@@ -434,7 +470,7 @@ router.post(
 
 // ─── Auto-start helper ───────────────────────────────────────────
 
-async function startTournament(tournament: typeof tournaments.$inferSelect) {
+async function startTournament(tournament: typeof tournaments.$inferSelect, force = false) {
   const participants = await db
     .select({
       agentId: tournamentParticipants.agentId,
@@ -443,8 +479,64 @@ async function startTournament(tournament: typeof tournaments.$inferSelect) {
     .from(tournamentParticipants)
     .where(eq(tournamentParticipants.tournamentId, tournament.id));
 
-  const size = tournament.size ?? 8;
-  if (participants.length < size) return false;
+  const declaredSize = tournament.size ?? 8;
+
+  if (force) {
+    // Force-start: need at least 2 participants
+    if (participants.length < 2) return false;
+  } else {
+    // Normal start: need exactly the declared size
+    if (participants.length < declaredSize) return false;
+  }
+
+  const actualSize = force ? participants.length : declaredSize;
+
+  // Determine bracket size: round up to nearest power of 2
+  const bracketSize = actualSize >= 5 ? 8 : actualSize >= 3 ? 4 : 2;
+
+  // If force-starting with fewer players, update tournament size and re-create match slots
+  if (force && actualSize !== declaredSize) {
+    await db
+      .update(tournaments)
+      .set({ size: actualSize })
+      .where(eq(tournaments.id, tournament.id));
+
+    // Delete existing match slots and re-create for correct bracket
+    await db
+      .delete(tournamentMatches)
+      .where(eq(tournamentMatches.tournamentId, tournament.id));
+
+    const matchSlots: { round: number; matchNumber: number; bracketPosition: number }[] = [];
+    if (bracketSize === 8) {
+      matchSlots.push(
+        { round: 1, matchNumber: 1, bracketPosition: 1 },
+        { round: 1, matchNumber: 2, bracketPosition: 2 },
+        { round: 1, matchNumber: 3, bracketPosition: 3 },
+        { round: 1, matchNumber: 4, bracketPosition: 4 },
+        { round: 2, matchNumber: 1, bracketPosition: 5 },
+        { round: 2, matchNumber: 2, bracketPosition: 6 },
+        { round: 3, matchNumber: 1, bracketPosition: 7 },
+      );
+    } else if (bracketSize === 4) {
+      matchSlots.push(
+        { round: 2, matchNumber: 1, bracketPosition: 5 },
+        { round: 2, matchNumber: 2, bracketPosition: 6 },
+        { round: 3, matchNumber: 1, bracketPosition: 7 },
+      );
+    } else {
+      matchSlots.push(
+        { round: 3, matchNumber: 1, bracketPosition: 7 },
+      );
+    }
+
+    await db.insert(tournamentMatches).values(
+      matchSlots.map((slot) => ({
+        tournamentId: tournament.id,
+        ...slot,
+        status: "pending" as const,
+      }))
+    );
+  }
 
   // Fetch debate scores for seeding
   const agentIds = participants.map((p) => p.agentId);
@@ -475,8 +567,8 @@ async function startTournament(tournament: typeof tournaments.$inferSelect) {
     );
   });
 
-  // Assign seeds 1-8 and snapshot ELO
-  for (let i = 0; i < size; i++) {
+  // Assign seeds and snapshot ELO
+  for (let i = 0; i < actualSize; i++) {
     const p = sorted[i];
     const elo = statsMap[p.agentId]?.debateScore ?? 1000;
     await db
@@ -491,45 +583,151 @@ async function startTournament(tournament: typeof tournaments.$inferSelect) {
   }
 
   // Build seed → agentId map
-  const seedToAgent = Object.fromEntries(
+  const seedToAgent: Record<number, string> = Object.fromEntries(
     sorted.map((p, i) => [i + 1, p.agentId])
   );
+
+  // Select matchup set by bracket size
+  const matchups = bracketSize === 8 ? QF_MATCHUPS : bracketSize === 4 ? SF_MATCHUPS : FINAL_MATCHUP;
+  const startingRound = bracketSize === 8 ? 1 : bracketSize === 4 ? 2 : 3;
 
   // Update tournament status
   await db
     .update(tournaments)
-    .set({ status: "active", currentRound: 1, startedAt: new Date() })
+    .set({ status: "active", currentRound: startingRound, startedAt: new Date() })
     .where(eq(tournaments.id, tournament.id));
 
   // Get match slots
-  const matchSlots = await db
+  const matchSlotRows = await db
     .select()
     .from(tournamentMatches)
     .where(eq(tournamentMatches.tournamentId, tournament.id))
     .orderBy(asc(tournamentMatches.bracketPosition));
 
-  // For each QF match: assign agents, coin flip, create debate
-  for (const qf of QF_MATCHUPS) {
-    const match = matchSlots.find((m) => m.bracketPosition === qf.pos);
+  // For each first-round match: assign agents, handle byes, coin flip, create debate
+  for (const mu of matchups) {
+    const match = matchSlotRows.find((m) => m.bracketPosition === mu.pos);
     if (!match) continue;
 
-    const highSeedAgent = seedToAgent[qf.highSeed];
-    const lowSeedAgent = seedToAgent[qf.lowSeed];
+    const highSeedAgent = seedToAgent[mu.highSeed]; // always exists
+    const lowSeedAgent = seedToAgent[mu.lowSeed]; // may be undefined (bye)
 
+    if (!lowSeedAgent) {
+      // BYE — mark match completed, advance high seed
+      await db
+        .update(tournamentMatches)
+        .set({
+          proAgentId: highSeedAgent,
+          winnerId: highSeedAgent,
+          status: "bye",
+          completedAt: new Date(),
+        })
+        .where(eq(tournamentMatches.id, match.id));
+
+      // Advance high seed to next round via FEEDER_MAP
+      const nextPos = FEEDER_MAP[match.bracketPosition];
+      if (nextPos) {
+        const [nextMatch] = await db
+          .select()
+          .from(tournamentMatches)
+          .where(
+            and(
+              eq(tournamentMatches.tournamentId, tournament.id),
+              eq(tournamentMatches.bracketPosition, nextPos)
+            )
+          )
+          .limit(1);
+
+        if (nextMatch) {
+          // Determine slot: lower bracket position fills pro, higher fills con
+          const feeders = Object.keys(FEEDER_MAP)
+            .filter((k) => FEEDER_MAP[Number(k)] === nextPos)
+            .map(Number);
+          const isFirstFeeder = match.bracketPosition === Math.min(...feeders);
+          const updateField = isFirstFeeder
+            ? { proAgentId: highSeedAgent }
+            : { conAgentId: highSeedAgent };
+
+          await db
+            .update(tournamentMatches)
+            .set(updateField)
+            .where(eq(tournamentMatches.id, nextMatch.id));
+        }
+      }
+    } else {
+      // Normal match — coin flip + create debate
+      const coinFlip = Math.random() < 0.5;
+      const proId = coinFlip ? highSeedAgent : lowSeedAgent;
+      const conId = coinFlip ? lowSeedAgent : highSeedAgent;
+      const coinFlipResult = (proId === highSeedAgent)
+        ? "higher_seed_pro"
+        : "lower_seed_pro";
+
+      await db
+        .update(tournamentMatches)
+        .set({ proAgentId: proId, conAgentId: conId, coinFlipResult, status: "ready" })
+        .where(eq(tournamentMatches.id, match.id));
+
+      const updatedMatch = { ...match, proAgentId: proId, conAgentId: conId };
+      await createTournamentDebate(tournament, updatedMatch, proId, conId);
+    }
+  }
+
+  // After byes: check if any next-round matches now have both slots filled
+  const refreshedSlots = await db
+    .select()
+    .from(tournamentMatches)
+    .where(eq(tournamentMatches.tournamentId, tournament.id))
+    .orderBy(asc(tournamentMatches.bracketPosition));
+
+  for (const slot of refreshedSlots) {
+    if (slot.status !== "pending") continue;
+    if (!slot.proAgentId || !slot.conAgentId) continue;
+
+    // Both slots filled (from two byes feeding in) — coin flip + create debate
     const coinFlip = Math.random() < 0.5;
-    const proId = coinFlip ? highSeedAgent : lowSeedAgent;
-    const conId = coinFlip ? lowSeedAgent : highSeedAgent;
-    const coinFlipResult = (proId === highSeedAgent)
-      ? "higher_seed_pro"
-      : "lower_seed_pro";
+    const proId = coinFlip ? slot.proAgentId : slot.conAgentId;
+    const conId = coinFlip ? slot.conAgentId : slot.proAgentId;
+
+    // Determine higher seed for coin flip result
+    const [proP] = await db
+      .select({ seed: tournamentParticipants.seed })
+      .from(tournamentParticipants)
+      .where(
+        and(
+          eq(tournamentParticipants.tournamentId, tournament.id),
+          eq(tournamentParticipants.agentId, proId)
+        )
+      )
+      .limit(1);
+
+    const [conP] = await db
+      .select({ seed: tournamentParticipants.seed })
+      .from(tournamentParticipants)
+      .where(
+        and(
+          eq(tournamentParticipants.tournamentId, tournament.id),
+          eq(tournamentParticipants.agentId, conId)
+        )
+      )
+      .limit(1);
+
+    const higherSeedIsPro = (proP?.seed ?? 99) < (conP?.seed ?? 99);
+    const coinFlipResult = higherSeedIsPro ? "higher_seed_pro" : "lower_seed_pro";
 
     await db
       .update(tournamentMatches)
       .set({ proAgentId: proId, conAgentId: conId, coinFlipResult, status: "ready" })
-      .where(eq(tournamentMatches.id, match.id));
+      .where(eq(tournamentMatches.id, slot.id));
 
-    const updatedMatch = { ...match, proAgentId: proId, conAgentId: conId };
-    await createTournamentDebate(tournament, updatedMatch, proId, conId);
+    // Update current round
+    await db
+      .update(tournaments)
+      .set({ currentRound: slot.round })
+      .where(eq(tournaments.id, tournament.id));
+
+    const freshMatch = { ...slot, proAgentId: proId, conAgentId: conId };
+    await createTournamentDebate(tournament, freshMatch, proId, conId);
   }
 
   // Notify all participants
@@ -703,15 +901,17 @@ router.post(
       return error(res, "Tournament must be in registration phase to start", 400);
     }
 
-    const started = await startTournament(tournament);
+    const { force } = req.body ?? {};
+    const started = await startTournament(tournament, !!force);
     if (!started) {
       const [countResult] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(tournamentParticipants)
         .where(eq(tournamentParticipants.tournamentId, tournament.id));
+      const needed = force ? 2 : (tournament.size ?? 8);
       return error(
         res,
-        `Need ${tournament.size ?? 8} participants, only have ${countResult?.count ?? 0}`,
+        `Need at least ${needed} participants, only have ${countResult?.count ?? 0}`,
         400
       );
     }
@@ -719,7 +919,7 @@ router.post(
     return success(res, {
       started: true,
       tournamentId: tournament.id,
-      message: `Tournament started with ${tournament.size ?? 8} participants. Quarterfinal debates created.`,
+      message: `Tournament started. Bracket debates created.`,
     });
   })
 );

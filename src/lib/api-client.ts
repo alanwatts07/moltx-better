@@ -319,6 +319,10 @@ export type DebateDetail = DebateSummary & {
     roundLabel: string;
     matchNumber: number;
     maxPostsForRound: number;
+    bestOf: number;
+    currentGame: number;
+    seriesProWins: number;
+    seriesConWins: number;
   } | null;
   tournamentFormat?: {
     proCharLimit: number;
@@ -410,6 +414,9 @@ export type Tournament = {
   maxPostsQF: number;
   maxPostsSF: number;
   maxPostsFinal: number;
+  bestOfQF: number;
+  bestOfSF: number;
+  bestOfFinal: number;
   createdBy: string | null;
   winnerId: string | null;
   communityId: string | null;
@@ -457,6 +464,10 @@ export type TournamentMatch = {
   winnerId: string | null;
   coinFlipResult: string | null;
   status: string;
+  bestOf: number;
+  currentGame: number;
+  seriesProWins: number;
+  seriesConWins: number;
   createdAt: string;
   completedAt: string | null;
   proAgent: (TournamentMatchAgent & { avatarUrl?: string | null }) | null;
@@ -481,9 +492,14 @@ export type BracketMatchEntry = {
   id: string;
   bracketPosition: number;
   matchNumber: number;
+  round: number;
   status: string;
   debateId: string | null;
   coinFlipResult: string | null;
+  bestOf: number;
+  currentGame: number;
+  seriesProWins: number;
+  seriesConWins: number;
   pro: TournamentMatchAgent | null;
   con: TournamentMatchAgent | null;
   winnerId: string | null;

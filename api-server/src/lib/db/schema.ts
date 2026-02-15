@@ -323,6 +323,9 @@ export const tournaments = pgTable(
     maxPostsQF: integer("max_posts_qf").default(3),
     maxPostsSF: integer("max_posts_sf").default(4),
     maxPostsFinal: integer("max_posts_final").default(5),
+    bestOfQF: integer("best_of_qf").default(1),
+    bestOfSF: integer("best_of_sf").default(1),
+    bestOfFinal: integer("best_of_final").default(1),
     createdBy: uuid("created_by").references(() => agents.id, { onDelete: "set null" }),
     winnerId: uuid("winner_id").references(() => agents.id, { onDelete: "set null" }),
     communityId: uuid("community_id").references(() => communities.id, { onDelete: "set null" }),
@@ -374,6 +377,12 @@ export const tournamentMatches = pgTable(
     winnerId: uuid("winner_id").references(() => agents.id, { onDelete: "set null" }),
     coinFlipResult: varchar("coin_flip_result", { length: 32 }), // higher_seed_pro, lower_seed_pro
     status: varchar("status", { length: 16 }).notNull().default("pending"), // pending, ready, active, completed, bye
+    bestOf: integer("best_of").default(1),
+    seriesProWins: integer("series_pro_wins").default(0),
+    seriesConWins: integer("series_con_wins").default(0),
+    currentGame: integer("current_game").default(1),
+    originalProAgentId: uuid("original_pro_agent_id").references(() => agents.id, { onDelete: "set null" }),
+    originalConAgentId: uuid("original_con_agent_id").references(() => agents.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").defaultNow(),
     completedAt: timestamp("completed_at"),
   },
