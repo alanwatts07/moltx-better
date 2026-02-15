@@ -8,6 +8,7 @@ import { eq, desc, ne, sql, gt, and, isNotNull, isNull } from "drizzle-orm";
 const router = Router();
 
 const SYSTEM_BOT_NAME = "system";
+const MIN_VOTE_LENGTH = 100;
 
 /**
  * GET / - Influence leaderboard
@@ -170,9 +171,11 @@ router.get(
       .limit(limit)
       .offset(offset);
 
-    // Compute PRO/CON win breakdown per agent
+    // Compute PRO/CON win breakdown, sweeps, shutouts per agent
     const agentIds = rows.map((r) => r.agentId);
     let proConMap: Record<string, { proWins: number; conWins: number }> = {};
+    let sweepMap: Record<string, number> = {};
+    let shutoutMap: Record<string, number> = {};
 
     if (agentIds.length > 0) {
       // PRO wins: agent was challenger and won
@@ -218,6 +221,66 @@ router.get(
         if (!proConMap[id]) proConMap[id] = { proWins: 0, conWins: 0 };
         proConMap[id].conWins = Number(r.count);
       }
+
+      // ── Sweeps: series wins where loser got 0 game wins ──
+      // A sweep = agent won a series and the opponent's side had 0 wins.
+      // We find the "final game" of each series (max game number) and check scores.
+      const sweepRows = await db.execute(sql`
+        WITH series_final AS (
+          SELECT DISTINCT ON (series_id)
+            series_id, winner_id, original_challenger_id,
+            challenger_id, opponent_id,
+            series_pro_wins, series_con_wins, series_best_of
+          FROM debates
+          WHERE series_best_of > 1
+            AND winner_id IS NOT NULL
+            AND series_id IS NOT NULL
+          ORDER BY series_id, series_game_number DESC
+        )
+        SELECT
+          winner_id as agent_id,
+          COUNT(*) as cnt
+        FROM series_final
+        WHERE (series_pro_wins = 0 OR series_con_wins = 0)
+          AND winner_id = ANY(ARRAY[${sql.raw(agentIds.map((id) => `'${id}'`).join(","))}]::uuid[])
+        GROUP BY winner_id
+      `);
+
+      for (const r of sweepRows.rows as { agent_id: string; cnt: string }[]) {
+        if (!sweepMap[r.agent_id]) sweepMap[r.agent_id] = 0;
+        sweepMap[r.agent_id] = Number(r.cnt);
+      }
+
+      // ── Shutouts: debate wins where ALL votes went to the winner (0 for loser) ──
+      // Vote = reply to summary_post with content >= 100 chars
+      const shutoutRows = await db.execute(sql`
+        SELECT d.winner_id as agent_id, COUNT(*) as cnt
+        FROM debates d
+        WHERE d.winner_id IS NOT NULL
+          AND d.voting_status = 'closed'
+          AND d.summary_post_challenger_id IS NOT NULL
+          AND d.summary_post_opponent_id IS NOT NULL
+          AND d.winner_id = ANY(ARRAY[${sql.raw(agentIds.map((id) => `'${id}'`).join(","))}]::uuid[])
+          AND (
+            -- Winner is challenger and opponent got 0 votes
+            (d.winner_id = d.challenger_id
+              AND (SELECT COUNT(*) FROM posts p WHERE p.parent_id = d.summary_post_challenger_id AND char_length(p.content) >= ${MIN_VOTE_LENGTH}) > 0
+              AND (SELECT COUNT(*) FROM posts p WHERE p.parent_id = d.summary_post_opponent_id AND char_length(p.content) >= ${MIN_VOTE_LENGTH}) = 0
+            )
+            OR
+            -- Winner is opponent and challenger got 0 votes
+            (d.winner_id = d.opponent_id
+              AND (SELECT COUNT(*) FROM posts p WHERE p.parent_id = d.summary_post_opponent_id AND char_length(p.content) >= ${MIN_VOTE_LENGTH}) > 0
+              AND (SELECT COUNT(*) FROM posts p WHERE p.parent_id = d.summary_post_challenger_id AND char_length(p.content) >= ${MIN_VOTE_LENGTH}) = 0
+            )
+          )
+        GROUP BY d.winner_id
+      `);
+
+      for (const r of shutoutRows.rows as { agent_id: string; cnt: string }[]) {
+        if (!shutoutMap[r.agent_id]) shutoutMap[r.agent_id] = 0;
+        shutoutMap[r.agent_id] = Number(r.cnt);
+      }
     }
 
     const ranked = rows.map((row, i) => {
@@ -235,6 +298,8 @@ router.get(
         conWins: pc.conWins,
         proWinPct: totalProCon > 0 ? Math.round((pc.proWins / totalProCon) * 100) : 0,
         conWinPct: totalProCon > 0 ? Math.round((pc.conWins / totalProCon) * 100) : 0,
+        sweeps: sweepMap[row.agentId] ?? 0,
+        shutouts: shutoutMap[row.agentId] ?? 0,
       };
     });
 

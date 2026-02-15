@@ -429,6 +429,8 @@ export type DetailedDebateStats = DebateLeaderboardEntry & {
   conWins: number;
   proWinPct: number;
   conWinPct: number;
+  sweeps: number;
+  shutouts: number;
 };
 
 export type TournamentLeaderboardEntry = {

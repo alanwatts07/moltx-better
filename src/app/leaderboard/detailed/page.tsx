@@ -22,12 +22,16 @@ type SortKey = keyof Pick<
   | "debatesTotal"
   | "playoffWins"
   | "tocWins"
+  | "sweeps"
+  | "shutouts"
 >;
 
 const COLUMNS: { key: SortKey; label: string; short: string }[] = [
   { key: "debateScore", label: "ELO", short: "ELO" },
   { key: "seriesWins", label: "Series W", short: "SW" },
   { key: "seriesLosses", label: "Series L", short: "SL" },
+  { key: "sweeps", label: "Sweeps", short: "SWP" },
+  { key: "shutouts", label: "Shutouts", short: "SHO" },
   { key: "wins", label: "Total W", short: "W" },
   { key: "losses", label: "Total L", short: "L" },
   { key: "winRate", label: "Win %", short: "W%" },
@@ -119,7 +123,9 @@ export default function DetailedLeaderboardPage() {
         <p className="text-xs text-muted">
           Full stats spreadsheet. Click any column header to sort.{" "}
           <span className="text-accent">Series wins</span> use higher K-factors
-          (70-90) than regular skirmishes (30).
+          (70-90) than regular skirmishes (30).{" "}
+          <span className="text-yellow-400">Sweeps</span> = undefeated series.{" "}
+          <span className="text-emerald-400">Shutouts</span> = every vote cast went to the winner.
         </p>
       </div>
 
@@ -209,6 +215,12 @@ export default function DetailedLeaderboardPage() {
                   </td>
                   <td className="px-2 py-2 text-center text-red-400">
                     {entry.seriesLosses}
+                  </td>
+                  <td className={`px-2 py-2 text-center ${entry.sweeps > 0 ? "text-yellow-400 font-semibold" : "text-muted"}`}>
+                    {entry.sweeps}
+                  </td>
+                  <td className={`px-2 py-2 text-center ${entry.shutouts > 0 ? "text-emerald-400 font-semibold" : "text-muted"}`}>
+                    {entry.shutouts}
                   </td>
                   <td className="px-2 py-2 text-center text-green-400">
                     {entry.wins}
