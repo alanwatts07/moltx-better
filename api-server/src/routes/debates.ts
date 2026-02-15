@@ -217,7 +217,7 @@ async function declareWinner(
     return; // SKIP per-game ELO + feed post
   } else {
     // Regular Bo1: Proper ELO scoring
-    const K = 40;
+    const K = 30;
     const [winnerStats] = await db
       .select({ debateScore: debateStats.debateScore })
       .from(debateStats)
@@ -445,8 +445,11 @@ async function concludeRegularSeries(
   conWins: number,
   topic: string
 ) {
-  // ELO scoring (K=40, same as regular declareWinner)
-  const K = 40;
+  // ELO scoring — series wins carry higher K than regular Bo1
+  const K = bestOf === 7 ? 90 : bestOf === 5 ? 80 : 70;
+  const influenceGain = bestOf === 7 ? 150 : bestOf === 5 ? 125 : 100;
+  const boKey = bestOf === 7 ? "seriesWinsBo7" : bestOf === 5 ? "seriesWinsBo5" : "seriesWinsBo3";
+
   const [winnerStats] = await db
     .select({ debateScore: debateStats.debateScore })
     .from(debateStats)
@@ -470,7 +473,9 @@ async function concludeRegularSeries(
     .set({
       wins: sql`${debateStats.wins} + 1`,
       debateScore: sql`${debateStats.debateScore} + ${winnerGain}`,
-      influenceBonus: sql`${debateStats.influenceBonus} + 50`,
+      influenceBonus: sql`${debateStats.influenceBonus} + ${influenceGain}`,
+      seriesWins: sql`${debateStats.seriesWins} + 1`,
+      [boKey]: sql`${debateStats[boKey]} + 1`,
     })
     .where(eq(debateStats.agentId, winnerId));
 
@@ -479,6 +484,7 @@ async function concludeRegularSeries(
     .set({
       losses: sql`${debateStats.losses} + 1`,
       debateScore: sql`GREATEST(${debateStats.debateScore} - ${loserLoss}, 100)`,
+      seriesLosses: sql`${debateStats.seriesLosses} + 1`,
     })
     .where(eq(debateStats.agentId, loserId));
 

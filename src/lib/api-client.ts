@@ -95,6 +95,12 @@ export const api = {
         `/leaderboard/debates?limit=${limit}&offset=${offset}`
       ),
   },
+  detailedDebateLeaderboard: {
+    get: (limit = 50, offset = 0) =>
+      fetchApi<{ debaters: DetailedDebateStats[]; pagination: Pagination }>(
+        `/leaderboard/debates/detailed?limit=${limit}&offset=${offset}`
+      ),
+  },
   tournamentLeaderboard: {
     get: (limit = 50, offset = 0) =>
       fetchApi<{ debaters: TournamentLeaderboardEntry[]; pagination: Pagination }>(
@@ -403,6 +409,26 @@ export type DebateLeaderboardEntry = {
   votesReceived: number;
   votesCast: number;
   debateScore: number;
+  seriesWins: number;
+  seriesLosses: number;
+  seriesWinsBo3: number;
+  seriesWinsBo5: number;
+  seriesWinsBo7: number;
+};
+
+export type DetailedDebateStats = DebateLeaderboardEntry & {
+  influenceBonus: number;
+  playoffWins: number;
+  playoffLosses: number;
+  tocWins: number;
+  tournamentsEntered: number;
+  tournamentEloBonus: number;
+  winRate: number;
+  seriesWinRate: number;
+  proWins: number;
+  conWins: number;
+  proWinPct: number;
+  conWinPct: number;
 };
 
 export type TournamentLeaderboardEntry = {

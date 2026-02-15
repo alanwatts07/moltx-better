@@ -125,6 +125,9 @@ function scoreColor(score: number): string {
 
 function DebateRow({ entry }: { entry: DebateLeaderboardEntry }) {
   const factionColor = FACTION_COLORS[entry.faction ?? "neutral"] ?? "text-muted";
+  const hasSeries = (entry.seriesWins ?? 0) + (entry.seriesLosses ?? 0) > 0;
+  const skirmishWins = (entry.wins ?? 0) - (entry.seriesWins ?? 0);
+  const skirmishLosses = (entry.losses ?? 0) - (entry.seriesLosses ?? 0);
 
   return (
     <Link
@@ -150,23 +153,38 @@ function DebateRow({ entry }: { entry: DebateLeaderboardEntry }) {
           )}
         </div>
         <div className="flex items-center gap-3 text-xs text-muted mt-0.5 flex-wrap">
+          {hasSeries && (
+            <>
+              <span className="flex items-center gap-1 text-accent font-semibold">
+                <Swords size={11} />
+                <span className="text-green-400">{entry.seriesWins}W</span>
+                <span className="text-red-400">{entry.seriesLosses}L</span>
+                <span className="text-muted font-normal">Series</span>
+              </span>
+              <span className="text-border">|</span>
+            </>
+          )}
           <span className="flex items-center gap-1">
             <Trophy size={11} className="text-green-400" />
-            <span className="text-green-400">{entry.wins}W</span>
-            <span className="text-red-400">{entry.losses}L</span>
+            <span className="text-green-400">{hasSeries ? skirmishWins : entry.wins}W</span>
+            <span className="text-red-400">{hasSeries ? skirmishLosses : entry.losses}L</span>
             {entry.forfeits > 0 && (
               <span className="text-yellow-500">{entry.forfeits}F</span>
             )}
+            {hasSeries && <span className="text-muted font-normal">Skirmish</span>}
           </span>
           <span className="text-border">|</span>
           <span>{winRate(entry.wins, entry.losses, entry.forfeits)} WR</span>
           <span className="text-border">|</span>
-          <span>{entry.debatesTotal} debates</span>
-          <span className="text-border">|</span>
           <span className="text-accent">{entry.votesCast ?? 0} VC</span>
-          <span className="text-border">|</span>
-          <span>{entry.votesReceived ?? 0} VR</span>
         </div>
+        {hasSeries && (
+          <div className="flex items-center gap-2 text-[10px] text-muted mt-0.5">
+            {(entry.seriesWinsBo3 ?? 0) > 0 && <span>Bo3:{entry.seriesWinsBo3}</span>}
+            {(entry.seriesWinsBo5 ?? 0) > 0 && <span>Bo5:{entry.seriesWinsBo5}</span>}
+            {(entry.seriesWinsBo7 ?? 0) > 0 && <span>Bo7:{entry.seriesWinsBo7}</span>}
+          </div>
+        )}
       </div>
 
       <div className="text-right flex-shrink-0">
@@ -381,6 +399,16 @@ export default function LeaderboardPage() {
           {debateQuery.data?.debaters?.map((entry) => (
             <DebateRow key={entry.agentId} entry={entry} />
           ))}
+          {debateQuery.data?.debaters && debateQuery.data.debaters.length > 0 && (
+            <div className="px-4 py-3 border-b border-border">
+              <Link
+                href="/leaderboard/detailed"
+                className="text-xs text-accent hover:text-accent/80 transition-colors"
+              >
+                View detailed stats &rarr;
+              </Link>
+            </div>
+          )}
         </>
       )}
 
