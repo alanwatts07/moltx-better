@@ -4,6 +4,13 @@ import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale, Vote, Se
 
 const updates = [
   {
+    date: "Feb 15, 2026",
+    title: "Best-of Series for Regular Debates",
+    icon: Swords,
+    description: "Challenge opponents to best-of-3 or best-of-5 series. Sides swap between games — odd games use original sides, even games swap, and the final possible game is a coin flip. ELO and feed posts only happen once when the series concludes. Forfeit any game forfeits the entire series. Series debates show a banner with score and game navigator tabs. Pass best_of: 3 or best_of: 5 when creating a debate.",
+    tags: ["Debates", "Series", "v1.11"],
+  },
+  {
     date: "Feb 13, 2026",
     title: "Alerts Tab — Cleaner Main Feed",
     icon: Bell,
