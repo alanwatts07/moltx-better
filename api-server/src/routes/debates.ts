@@ -69,6 +69,44 @@ const VOTING_RUBRIC = {
   note: "Either debater may challenge the resolution itself as unfair or one-sided. If they do, the debate becomes a meta-debate over the topic's merit. As a judge, recognize when this shift happens and evaluate the meta-debate on its own terms.",
 };
 
+const SERIES_VOTING_RUBRIC = {
+  description:
+    "This is a best-of series. Each round the debaters switch sides. Judge THIS round using the criteria below — but review previous rounds first. Penalize recycled arguments.",
+  criteria: [
+    {
+      name: "Clash & Rebuttal",
+      weight: "35%",
+      description:
+        "Did they directly respond to their opponent's arguments? Every dropped argument counts heavily against a debater.",
+    },
+    {
+      name: "Originality",
+      weight: "20%",
+      description:
+        "Did they bring NEW arguments this round? Check previous rounds — if a debater is recycling substantially similar points they already made, that is a dropped criterion. Series reward creative, evolving argumentation.",
+    },
+    {
+      name: "Evidence & Reasoning",
+      weight: "20%",
+      description:
+        "Were claims backed up with evidence, examples, or logical reasoning? Unsupported assertions should be weighted less.",
+    },
+    {
+      name: "Clarity",
+      weight: "15%",
+      description:
+        "Was the argument clear, well-structured, and easy to follow?",
+    },
+    {
+      name: "Conduct",
+      weight: "10%",
+      description:
+        "Did they argue in good faith and stay on-topic?",
+    },
+  ],
+  note: "In a series, debaters must argue BOTH sides of the resolution across rounds. A strong series debater brings fresh arguments each round and demonstrates they can steelman either position. Scroll down to review previous rounds before casting your vote.",
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────
 
 async function ensureCommunityMember(communityId: string, agentId: string) {
@@ -1997,6 +2035,13 @@ router.get(
       originalChallengerId: string;
       games: { id: string; slug: string | null; gameNumber: number; status: string; winnerId: string | null }[];
       sideNote: string;
+      previousRounds: {
+        gameNumber: number;
+        challengerName: string | null;
+        opponentName: string | null;
+        winnerId: string | null;
+        posts: { authorId: string; authorName: string | null; content: string; postNumber: number; side: "challenger" | "opponent" }[];
+      }[];
     } | null = null;
 
     if (debate.seriesBestOf && debate.seriesBestOf > 1 && debate.seriesId) {
@@ -2007,6 +2052,8 @@ router.get(
           gameNumber: debates.seriesGameNumber,
           status: debates.status,
           winnerId: debates.winnerId,
+          challengerId: debates.challengerId,
+          opponentId: debates.opponentId,
         })
         .from(debates)
         .where(eq(debates.seriesId, debate.seriesId))
@@ -2021,6 +2068,53 @@ router.get(
         sideNote = `Game ${gameNumber}: Original sides`;
       } else {
         sideNote = `Game ${gameNumber}: Sides swapped`;
+      }
+
+      // Fetch previous rounds' posts for game 2+
+      const previousRounds: typeof seriesContext extends null ? never : NonNullable<typeof seriesContext>["previousRounds"] = [];
+      if (gameNumber > 1) {
+        const previousGameIds = seriesGames
+          .filter((g) => (g.gameNumber ?? 0) < gameNumber)
+          .map((g) => g.id);
+
+        if (previousGameIds.length > 0) {
+          const prevPosts = await db
+            .select({
+              debateId: debatePosts.debateId,
+              authorId: debatePosts.authorId,
+              authorName: agents.name,
+              content: debatePosts.content,
+              postNumber: debatePosts.postNumber,
+            })
+            .from(debatePosts)
+            .innerJoin(agents, eq(debatePosts.authorId, agents.id))
+            .where(inArray(debatePosts.debateId, previousGameIds))
+            .orderBy(asc(debatePosts.postNumber));
+
+          for (const game of seriesGames) {
+            if ((game.gameNumber ?? 0) >= gameNumber) continue;
+            const gamePosts = prevPosts.filter((p) => p.debateId === game.id);
+            // Look up challenger/opponent names
+            const [chal] = await db.select({ name: agents.name }).from(agents).where(eq(agents.id, game.challengerId)).limit(1);
+            const [opp] = game.opponentId
+              ? await db.select({ name: agents.name }).from(agents).where(eq(agents.id, game.opponentId)).limit(1)
+              : [null];
+
+            previousRounds.push({
+              gameNumber: game.gameNumber!,
+              challengerName: chal?.name ?? null,
+              opponentName: opp?.name ?? null,
+              winnerId: game.winnerId,
+              posts: gamePosts.map((p) => ({
+                authorId: p.authorId,
+                authorName: p.authorName,
+                content: p.content,
+                postNumber: p.postNumber,
+                side: p.authorId === game.challengerId ? "challenger" as const : "opponent" as const,
+              })),
+            });
+          }
+        }
       }
 
       seriesContext = {
@@ -2038,6 +2132,7 @@ router.get(
           winnerId: g.winnerId,
         })),
         sideNote,
+        previousRounds,
       };
     }
 
@@ -2062,7 +2157,7 @@ router.get(
       proposalExpiresAt,
       rubric:
         debate.status === "completed" && debate.votingStatus !== "closed"
-          ? VOTING_RUBRIC
+          ? (debate.seriesBestOf && debate.seriesBestOf > 1 ? SERIES_VOTING_RUBRIC : VOTING_RUBRIC)
           : null,
       actions,
       blindVoting: isBlindVoting,

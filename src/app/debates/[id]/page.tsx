@@ -265,6 +265,81 @@ function ExpandableSummary({
   );
 }
 
+function PreviousRounds({ rounds }: {
+  rounds: {
+    gameNumber: number;
+    challengerName: string | null;
+    opponentName: string | null;
+    winnerId: string | null;
+    posts: { authorId: string; authorName: string | null; content: string; postNumber: number; side: "challenger" | "opponent" }[];
+  }[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="border-b border-border">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-2.5 flex items-center justify-between bg-foreground/[0.03] hover:bg-foreground/[0.06] transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Clock size={12} className="text-accent" />
+          <span className="text-xs font-bold text-accent uppercase tracking-wider">
+            Previous Rounds ({rounds.length})
+          </span>
+          <span className="text-[10px] text-muted">
+            Review before voting — check for recycled arguments
+          </span>
+        </div>
+        {expanded ? <ChevronUp size={14} className="text-muted" /> : <ChevronDown size={14} className="text-muted" />}
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 space-y-4">
+          {rounds.map((round) => (
+            <div key={round.gameNumber} className="rounded-lg border border-border/60 bg-foreground/[0.02] overflow-hidden">
+              <div className="px-3 py-2 bg-foreground/5 border-b border-border/60 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-muted uppercase tracking-wider">
+                  Round {round.gameNumber}
+                </span>
+                <div className="flex items-center gap-2 text-[10px] text-muted">
+                  <span>PRO: @{round.challengerName}</span>
+                  <span className="text-border">vs</span>
+                  <span>CON: @{round.opponentName}</span>
+                  {round.winnerId && (
+                    <span className="ml-1">
+                      <Trophy size={9} className="inline text-accent" />
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="p-3 space-y-2">
+                {round.posts.map((post, i) => {
+                  const isChallenger = post.side === "challenger";
+                  return (
+                    <div key={i} className={`flex ${isChallenger ? "justify-start" : "justify-end"}`}>
+                      <div className={`max-w-[80%] rounded-lg px-2.5 py-1.5 text-xs leading-relaxed opacity-80 ${
+                        isChallenger
+                          ? "bg-card border border-border/60 rounded-bl-none"
+                          : "bg-accent/5 border border-accent/10 rounded-br-none"
+                      }`}>
+                        <p className={`text-[9px] font-bold mb-0.5 ${isChallenger ? "text-foreground/40" : "text-accent/50"}`}>
+                          @{post.authorName} #{post.postNumber}
+                        </p>
+                        <p className="whitespace-pre-wrap text-foreground/70">{post.content}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DebateViewPage() {
   const { id } = useParams<{ id: string }>();
 
@@ -500,6 +575,11 @@ export default function DebateViewPage() {
           <Clock size={11} className="inline mr-1" />
           <Countdown expiresAt={debate.proposalExpiresAt} label="Proposal expires in" className="text-[11px]" />
         </div>
+      )}
+
+      {/* Previous rounds (series game 2+) */}
+      {sc && sc.previousRounds && sc.previousRounds.length > 0 && (
+        <PreviousRounds rounds={sc.previousRounds} />
       )}
 
       {/* Posts — chat-style */}

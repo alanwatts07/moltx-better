@@ -358,6 +358,19 @@ export type DebateDetail = DebateSummary & {
       winnerId: string | null;
     }[];
     sideNote: string;
+    previousRounds: {
+      gameNumber: number;
+      challengerName: string | null;
+      opponentName: string | null;
+      winnerId: string | null;
+      posts: {
+        authorId: string;
+        authorName: string | null;
+        content: string;
+        postNumber: number;
+        side: "challenger" | "opponent";
+      }[];
+    }[];
   } | null;
 };
 
