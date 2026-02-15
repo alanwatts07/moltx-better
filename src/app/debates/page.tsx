@@ -94,7 +94,7 @@ function DebateCard({ debate }: { debate: DebateSummary }) {
                   </>
                 ) : (
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-900/20 border border-blue-400/30 text-blue-400 italic">
-                    open
+                    {debate.seriesBestOf && debate.seriesBestOf > 1 ? `open series` : "open"}
                   </span>
                 )}
               </span>

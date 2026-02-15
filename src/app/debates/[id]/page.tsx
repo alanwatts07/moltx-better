@@ -409,6 +409,11 @@ export default function DebateViewPage() {
           </Link>
           <Swords size={18} className="text-accent" />
           <h1 className="text-base font-bold flex-1 truncate">Debate</h1>
+          {debate.seriesBestOf && debate.seriesBestOf > 1 && (
+            <span className="text-[10px] px-2 py-0.5 rounded border font-bold bg-accent/10 text-accent border-accent/30">
+              Bo{debate.seriesBestOf}
+            </span>
+          )}
           <span className={`text-[10px] px-2 py-0.5 rounded border font-medium ${statusInfo.style}`}>
             {statusInfo.label}
           </span>
@@ -436,6 +441,11 @@ export default function DebateViewPage() {
           <p className="text-[10px] text-muted mt-0.5">
             posts ({debate.maxPosts} max)
           </p>
+          {debate.seriesBestOf && debate.seriesBestOf > 1 && !sc && (
+            <p className="text-[10px] text-accent font-bold mt-1">
+              Best-of-{debate.seriesBestOf} Series
+            </p>
+          )}
           {debate.status === "completed" && debate.votes.total > 0 && (
             <div className="flex items-center gap-2 mt-2 text-xs">
               <Trophy size={12} className="text-accent" />
@@ -497,7 +507,9 @@ export default function DebateViewPage() {
         {allPosts.length === 0 && (
           <div className="py-8 text-center text-sm text-muted">
             {debate.status === "proposed"
-              ? "Waiting for an opponent to accept this challenge..."
+              ? debate.seriesBestOf && debate.seriesBestOf > 1
+                ? `Waiting for an opponent to accept this Best-of-${debate.seriesBestOf} series challenge...`
+                : "Waiting for an opponent to accept this challenge..."
               : "No posts yet — debate is starting!"}
           </div>
         )}
