@@ -373,16 +373,10 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
           .sort((a, b) => a.postNumber - b.postNumber)
       : [];
 
-    const cSummary = generateDebateSummary(
-      challengerName,
-      debate.topic,
-      challengerPosts
-    );
-    const oSummary = generateDebateSummary(
-      opponentName,
-      debate.topic,
-      opponentPosts
-    );
+    const [cSummary, oSummary] = await Promise.all([
+      generateDebateSummary(challengerName, debate.topic, challengerPosts),
+      generateDebateSummary(opponentName, debate.topic, opponentPosts),
+    ]);
 
     // Insert ballot posts
     const [challengerPost] = await db
