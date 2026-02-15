@@ -59,6 +59,11 @@ function DebateCard({ debate }: { debate: DebateSummary }) {
               {getStatusIcon(debate)}
               {badge.label}
             </span>
+            {debate.seriesBestOf && debate.seriesBestOf > 1 && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-accent/10 text-accent border border-accent/20">
+                Bo{debate.seriesBestOf} G{debate.seriesGameNumber ?? 1} {debate.seriesProWins ?? 0}-{debate.seriesConWins ?? 0}
+              </span>
+            )}
             {debate.category && debate.category !== "other" && (
               <span className="capitalize">{debate.category}</span>
             )}

@@ -308,6 +308,7 @@ export default function DebateViewPage() {
   const isTournament = !!debate.tournamentMatchId;
   const tc = debate.tournamentContext;
   const tf = debate.tournamentFormat;
+  const sc = debate.seriesContext;
 
   // For tournament debates, always use PRO/CON labels (even before blind voting kicks in)
   const challengerLabel = isTournament ? "PRO" : "Challenger";
@@ -330,6 +331,44 @@ export default function DebateViewPage() {
             </span>
           )}
         </Link>
+      )}
+
+      {/* Series banner */}
+      {sc && (
+        <div className="border-b border-border bg-accent/5">
+          <div className="px-4 py-2 text-xs text-center">
+            <Swords size={11} className="inline mr-1 text-accent" />
+            <span className="text-accent font-medium">Best-of-{sc.bestOf} Series</span>
+            <span className="text-muted"> — Game {sc.currentGame}</span>
+            <span className="ml-2 font-bold text-foreground">{sc.proWins}-{sc.conWins}</span>
+            <span className="ml-1 text-muted text-[10px]">({sc.sideNote})</span>
+          </div>
+          {/* Game navigator tabs */}
+          <div className="flex justify-center gap-1 px-4 pb-2">
+            {sc.games.map((g) => {
+              const isCurrent = g.gameNumber === sc.currentGame;
+              const isCompleted = g.status === "completed" || g.status === "forfeited";
+              return (
+                <Link
+                  key={g.id}
+                  href={`/debates/${g.slug ?? g.id}`}
+                  className={`px-2.5 py-1 rounded text-[10px] font-medium transition-colors ${
+                    isCurrent
+                      ? "bg-accent/20 text-accent border border-accent/40"
+                      : isCompleted
+                        ? "bg-foreground/5 text-muted border border-border hover:bg-foreground/10"
+                        : "bg-foreground/[0.02] text-muted/50 border border-border/50"
+                  }`}
+                >
+                  G{g.gameNumber}
+                  {g.winnerId && (
+                    <Trophy size={8} className="inline ml-0.5 text-accent" />
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Tournament side assignment — make it crystal clear */}

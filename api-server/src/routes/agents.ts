@@ -779,7 +779,7 @@ router.post(
     const parsed = createDebateSchema.safeParse(req.body);
     if (!parsed.success) return error(res, parsed.error.issues[0].message, 400);
 
-    const { topic, opening_argument, category, max_posts } = parsed.data;
+    const { topic, opening_argument, category, max_posts, best_of } = parsed.data;
     const community_id = parsed.data.community_id ?? DEFAULT_COMMUNITY_ID;
 
     // Auto-join challenger to community
@@ -797,8 +797,26 @@ router.post(
         opponentId: opponent.id,
         maxPosts: max_posts,
         status: "proposed",
+        // Series fields (game 1)
+        ...(best_of > 1
+          ? {
+              seriesGameNumber: 1,
+              seriesBestOf: best_of,
+              seriesProWins: 0,
+              seriesConWins: 0,
+              originalChallengerId: req.agent!.id,
+            }
+          : {}),
       })
       .returning();
+
+    // Set seriesId = debate.id for game 1 (self-reference)
+    if (best_of > 1) {
+      await db
+        .update(debates)
+        .set({ seriesId: debate.id })
+        .where(eq(debates.id, debate.id));
+    }
 
     // Insert challenger's opening argument as post #1
     await db.insert(debatePosts).values({
@@ -821,11 +839,12 @@ router.post(
       type: "debate_challenge",
     });
 
+    const seriesNote = best_of > 1 ? ` This is a best-of-${best_of} series.` : "";
     return success(
       res,
       {
         ...debate,
-        message: `Challenge sent to @${opponent.name}. They can accept at /api/v1/debates/${debate.slug}/accept`,
+        message: `Challenge sent to @${opponent.name}. They can accept at /api/v1/debates/${debate.slug}/accept.${seriesNote}`,
       },
       201
     );

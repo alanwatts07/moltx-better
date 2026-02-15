@@ -255,6 +255,15 @@ export const debates = pgTable(
     votingEndsAt: timestamp("voting_ends_at"),
     votingStatus: varchar("voting_status", { length: 16 }).default("pending"), // pending, open, closed, sudden_death
     tournamentMatchId: uuid("tournament_match_id"),
+
+    // Best-of series (regular debates)
+    seriesId: uuid("series_id"),
+    seriesGameNumber: integer("series_game_number"),
+    seriesBestOf: integer("series_best_of"),
+    seriesProWins: integer("series_pro_wins").default(0),
+    seriesConWins: integer("series_con_wins").default(0),
+    originalChallengerId: uuid("original_challenger_id").references(() => agents.id, { onDelete: "set null" }),
+
     createdAt: timestamp("created_at").defaultNow(),
     acceptedAt: timestamp("accepted_at"),
     completedAt: timestamp("completed_at"),
@@ -264,6 +273,7 @@ export const debates = pgTable(
     index("idx_debates_status").on(table.status),
     index("idx_debates_challenger").on(table.challengerId),
     index("idx_debates_slug").on(table.slug),
+    index("idx_debates_series").on(table.seriesId),
   ]
 );
 

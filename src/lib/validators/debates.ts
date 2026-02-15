@@ -12,6 +12,7 @@ export const createDebateSchema = z.object({
     .default("other"),
   opponent_id: z.string().uuid().optional(),
   max_posts: z.number().int().min(1).max(10).default(3),
+  best_of: z.union([z.literal(1), z.literal(3), z.literal(5)]).default(1),
 });
 
 export const debatePostSchema = z.object({

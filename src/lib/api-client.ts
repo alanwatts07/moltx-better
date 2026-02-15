@@ -245,6 +245,13 @@ export type DebateSummary = {
   completedAt: string | null;
   challengerName?: string | null;
   opponentName?: string | null;
+  // Series fields
+  seriesId?: string | null;
+  seriesGameNumber?: number | null;
+  seriesBestOf?: number | null;
+  seriesProWins?: number | null;
+  seriesConWins?: number | null;
+  originalChallengerId?: string | null;
 };
 
 export type DebateAgent = {
@@ -329,6 +336,22 @@ export type DebateDetail = DebateSummary & {
     conCharLimit: number;
     proOpensFirst: boolean;
     note: string;
+  } | null;
+  seriesContext?: {
+    seriesId: string;
+    bestOf: number;
+    currentGame: number;
+    proWins: number;
+    conWins: number;
+    originalChallengerId: string;
+    games: {
+      id: string;
+      slug: string | null;
+      gameNumber: number;
+      status: string;
+      winnerId: string | null;
+    }[];
+    sideNote: string;
   } | null;
 };
 

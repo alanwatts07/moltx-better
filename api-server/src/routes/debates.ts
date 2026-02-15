@@ -137,7 +137,17 @@ async function resolveVoting(
         return true;
       }
     }
-    // Regular debate: draw, no winner
+    // Series game with no votes: coin flip to prevent series deadlock
+    if (debate.seriesBestOf && debate.seriesBestOf > 1) {
+      const coinFlipWinner = Math.random() < 0.5
+        ? debate.challengerId
+        : debate.opponentId;
+      if (coinFlipWinner) {
+        await declareWinner(debate, coinFlipWinner);
+        return true;
+      }
+    }
+    // Regular Bo1 debate: draw, no winner
     await db
       .update(debates)
       .set({ votingStatus: "closed" })
@@ -157,6 +167,8 @@ async function declareWinner(
     winnerId === debate.challengerId ? debate.opponentId : debate.challengerId;
   const isTournament = !!debate.tournamentMatchId;
 
+  const isSeries = !!debate.seriesBestOf && debate.seriesBestOf > 1;
+
   await db
     .update(debates)
     .set({ winnerId, votingStatus: "closed" })
@@ -165,9 +177,47 @@ async function declareWinner(
   // Tournament debates: skip regular scoring, advance bracket instead
   if (isTournament) {
     await advanceTournamentBracket(debate, winnerId, isForfeit);
+  } else if (isSeries) {
+    // Series game: either create next game or conclude the series
+    if (isForfeit) {
+      // Forfeit any game = forfeit entire series immediately
+      const originalChallengerId = debate.originalChallengerId!;
+      const originalOpponentId =
+        originalChallengerId === debate.challengerId
+          ? debate.opponentId!
+          : debate.challengerId;
+      const seriesWinnerId = winnerId;
+      const seriesLoserId =
+        seriesWinnerId === originalChallengerId
+          ? originalOpponentId
+          : originalChallengerId;
+
+      // Count this game's win in series totals
+      const winnerIsChallenger = winnerId === debate.challengerId;
+      const newProWins = (debate.seriesProWins ?? 0) + (winnerIsChallenger ? 1 : 0);
+      const newConWins = (debate.seriesConWins ?? 0) + (winnerIsChallenger ? 0 : 1);
+
+      await db
+        .update(debates)
+        .set({ seriesProWins: newProWins, seriesConWins: newConWins })
+        .where(eq(debates.seriesId, debate.seriesId!));
+
+      await concludeRegularSeries(
+        debate.seriesId!,
+        seriesWinnerId,
+        seriesLoserId,
+        debate.seriesBestOf!,
+        newProWins,
+        newConWins,
+        debate.topic
+      );
+    } else {
+      await createNextSeriesGame(debate, winnerId);
+    }
+    return; // SKIP per-game ELO + feed post
   } else {
-    // Proper ELO: fetch both ratings, compute expected scores, apply K-factor
-    const K = 40; // K-factor for regular debates
+    // Regular Bo1: Proper ELO scoring
+    const K = 40;
     const [winnerStats] = await db
       .select({ debateScore: debateStats.debateScore })
       .from(debateStats)
@@ -386,6 +436,259 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
   }
 }
 
+// ─── Series Helpers ──────────────────────────────────────────────
+
+/**
+ * Conclude a best-of series: apply ELO, notify winner, post result to feed.
+ * This is the ONLY place ELO + feed posts happen for series debates.
+ */
+async function concludeRegularSeries(
+  seriesId: string,
+  winnerId: string,
+  loserId: string,
+  bestOf: number,
+  proWins: number,
+  conWins: number,
+  topic: string
+) {
+  // ELO scoring (K=40, same as regular declareWinner)
+  const K = 40;
+  const [winnerStats] = await db
+    .select({ debateScore: debateStats.debateScore })
+    .from(debateStats)
+    .where(eq(debateStats.agentId, winnerId))
+    .limit(1);
+  const [loserStats] = await db
+    .select({ debateScore: debateStats.debateScore })
+    .from(debateStats)
+    .where(eq(debateStats.agentId, loserId))
+    .limit(1);
+
+  const winnerElo = winnerStats?.debateScore ?? 1000;
+  const loserElo = loserStats?.debateScore ?? 1000;
+  const expectedWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
+  const expectedLoser = 1 - expectedWinner;
+  const winnerGain = Math.round(K * (1 - expectedWinner));
+  const loserLoss = Math.round(K * expectedLoser);
+
+  await db
+    .update(debateStats)
+    .set({
+      wins: sql`${debateStats.wins} + 1`,
+      debateScore: sql`${debateStats.debateScore} + ${winnerGain}`,
+      influenceBonus: sql`${debateStats.influenceBonus} + 50`,
+    })
+    .where(eq(debateStats.agentId, winnerId));
+
+  await db
+    .update(debateStats)
+    .set({
+      losses: sql`${debateStats.losses} + 1`,
+      debateScore: sql`GREATEST(${debateStats.debateScore} - ${loserLoss}, 100)`,
+    })
+    .where(eq(debateStats.agentId, loserId));
+
+  // Notify winner
+  await emitNotification({
+    recipientId: winnerId,
+    actorId: winnerId,
+    type: "debate_won",
+  });
+
+  // Post series result to feed
+  try {
+    const [winner] = await db
+      .select({ name: agents.name, displayName: agents.displayName })
+      .from(agents)
+      .where(eq(agents.id, winnerId))
+      .limit(1);
+    const [loser] = await db
+      .select({ name: agents.name, displayName: agents.displayName })
+      .from(agents)
+      .where(eq(agents.id, loserId))
+      .limit(1);
+
+    const winnerLabel = winner?.displayName || winner?.name || "Unknown";
+    const loserLabel = loser?.displayName || loser?.name || "Unknown";
+
+    // Find game 1 slug for the link
+    const [game1] = await db
+      .select({ slug: debates.slug })
+      .from(debates)
+      .where(and(eq(debates.seriesId, seriesId), eq(debates.seriesGameNumber, 1)))
+      .limit(1);
+    const slug = game1?.slug ?? seriesId;
+
+    const systemAgentId = await getSystemAgentId();
+    const postAgentId = systemAgentId || winnerId;
+
+    await db.insert(posts).values({
+      agentId: postAgentId,
+      type: "debate_result",
+      content: `**${winnerLabel}** won a best-of-${bestOf} series against **${loserLabel}** (${proWins}-${conWins})\n\nTopic: *${topic}*\n\n[View the series](/debates/${slug})`,
+      hashtags: ["#debate", "#series"],
+    });
+  } catch (err) {
+    console.error("[series-result-post] FAILED:", err);
+  }
+}
+
+/**
+ * After a game in a series ends, either conclude the series or create the next game.
+ */
+async function createNextSeriesGame(
+  debate: typeof debates.$inferSelect,
+  winnerId: string
+) {
+  const seriesId = debate.seriesId!;
+  const bestOf = debate.seriesBestOf!;
+  const originalChallengerId = debate.originalChallengerId!;
+  const gameNumber = debate.seriesGameNumber!;
+
+  // Determine which side won this game
+  const winnerIsChallenger = winnerId === debate.challengerId;
+  const proWinDelta = winnerIsChallenger ? 1 : 0;
+  const conWinDelta = winnerIsChallenger ? 0 : 1;
+
+  // Update series win counts on ALL games in the series
+  const newProWins = (debate.seriesProWins ?? 0) + proWinDelta;
+  const newConWins = (debate.seriesConWins ?? 0) + conWinDelta;
+
+  await db
+    .update(debates)
+    .set({ seriesProWins: newProWins, seriesConWins: newConWins })
+    .where(eq(debates.seriesId, seriesId));
+
+  // Check if series is over
+  const winsNeeded = Math.ceil(bestOf / 2);
+  if (newProWins >= winsNeeded || newConWins >= winsNeeded) {
+    // Series over — determine winner by originalChallengerId mapping
+    // "proWins" = wins by original challenger, "conWins" = wins by original opponent
+    const originalOpponentId =
+      originalChallengerId === debate.challengerId
+        ? debate.opponentId!
+        : debate.challengerId;
+    const seriesWinnerId =
+      newProWins >= winsNeeded ? originalChallengerId : originalOpponentId;
+    const seriesLoserId =
+      seriesWinnerId === originalChallengerId
+        ? originalOpponentId
+        : originalChallengerId;
+
+    await concludeRegularSeries(
+      seriesId,
+      seriesWinnerId,
+      seriesLoserId,
+      bestOf,
+      newProWins,
+      newConWins,
+      debate.topic
+    );
+    return;
+  }
+
+  // Create next game
+  const nextGameNumber = gameNumber + 1;
+
+  // Side assignment: last possible game = coin flip; odd games = original sides; even games = swapped
+  const isLastPossibleGame = nextGameNumber === bestOf;
+  let nextChallengerId: string;
+  let nextOpponentId: string;
+  let sideNote: string;
+
+  const originalOpponentId =
+    originalChallengerId === debate.challengerId
+      ? debate.opponentId!
+      : debate.challengerId;
+
+  if (isLastPossibleGame) {
+    // Coin flip for final possible game
+    const coinFlip = Math.random() < 0.5;
+    nextChallengerId = coinFlip ? originalChallengerId : originalOpponentId;
+    nextOpponentId = coinFlip ? originalOpponentId : originalChallengerId;
+    sideNote = `Game ${nextGameNumber}: Sides assigned by coin flip`;
+  } else if (nextGameNumber % 2 === 1) {
+    // Odd game: original sides
+    nextChallengerId = originalChallengerId;
+    nextOpponentId = originalOpponentId;
+    sideNote = `Game ${nextGameNumber}: Original sides`;
+  } else {
+    // Even game: swapped sides
+    nextChallengerId = originalOpponentId;
+    nextOpponentId = originalChallengerId;
+    sideNote = `Game ${nextGameNumber}: Sides swapped`;
+  }
+
+  // Find game 1 slug for the slug pattern
+  const [game1] = await db
+    .select({ slug: debates.slug })
+    .from(debates)
+    .where(and(eq(debates.seriesId, seriesId), eq(debates.seriesGameNumber, 1)))
+    .limit(1);
+  const baseSlug = game1?.slug ?? seriesId.slice(0, 8);
+  const nextSlug = `${baseSlug}-g${nextGameNumber}`;
+
+  // Create the next game — active immediately (no accept needed)
+  const [nextDebate] = await db
+    .insert(debates)
+    .values({
+      communityId: debate.communityId,
+      slug: nextSlug,
+      topic: debate.topic,
+      category: debate.category,
+      challengerId: nextChallengerId,
+      opponentId: nextOpponentId,
+      maxPosts: debate.maxPosts,
+      status: "active",
+      currentTurn: nextChallengerId, // PRO goes first
+      acceptedAt: new Date(),
+      lastPostAt: new Date(),
+      seriesId,
+      seriesGameNumber: nextGameNumber,
+      seriesBestOf: bestOf,
+      seriesProWins: newProWins,
+      seriesConWins: newConWins,
+      originalChallengerId,
+    })
+    .returning();
+
+  // Init stats for both (idempotent)
+  await db
+    .insert(debateStats)
+    .values({ agentId: nextChallengerId })
+    .onConflictDoNothing();
+  await db
+    .insert(debateStats)
+    .values({ agentId: nextOpponentId })
+    .onConflictDoNothing();
+
+  // Notify both participants
+  const [chalAgent] = await db
+    .select({ name: agents.name })
+    .from(agents)
+    .where(eq(agents.id, nextChallengerId))
+    .limit(1);
+  const [oppAgent] = await db
+    .select({ name: agents.name })
+    .from(agents)
+    .where(eq(agents.id, nextOpponentId))
+    .limit(1);
+
+  await emitNotification({
+    recipientId: nextChallengerId,
+    actorId: nextOpponentId,
+    type: "debate_turn",
+    message: `Series game ${nextGameNumber} of ${bestOf} has started! You are PRO (${sideNote}). Score: ${newProWins}-${newConWins}`,
+  });
+
+  await emitNotification({
+    recipientId: nextOpponentId,
+    actorId: nextChallengerId,
+    type: "debate_turn",
+    message: `Series game ${nextGameNumber} of ${bestOf} has started! You are CON (${sideNote}). Score: ${newProWins}-${newConWins}. Waiting for PRO to open.`,
+  });
+}
+
 /** Try to read caller agent from Authorization header without requiring auth */
 async function optionalCallerId(req: Request): Promise<string | null> {
   const authHeader = req.headers.authorization;
@@ -522,7 +825,7 @@ router.post(
       return error(res, parsed.error.issues[0].message, 400);
     }
 
-    const { topic, opening_argument, category, opponent_id, max_posts } =
+    const { topic, opening_argument, category, opponent_id, max_posts, best_of } =
       parsed.data;
     const community_id = parsed.data.community_id ?? DEFAULT_COMMUNITY_ID;
 
@@ -564,8 +867,26 @@ router.post(
         opponentId: opponent_id ?? null,
         maxPosts: max_posts,
         status: "proposed",
+        // Series fields (game 1 — seriesId set after insert to self-reference)
+        ...(best_of > 1
+          ? {
+              seriesGameNumber: 1,
+              seriesBestOf: best_of,
+              seriesProWins: 0,
+              seriesConWins: 0,
+              originalChallengerId: agent.id,
+            }
+          : {}),
       })
       .returning();
+
+    // Set seriesId = debate.id for game 1 (self-reference)
+    if (best_of > 1) {
+      await db
+        .update(debates)
+        .set({ seriesId: debate.id })
+        .where(eq(debates.id, debate.id));
+    }
 
     // Insert challenger's opening argument as post #1
     await db.insert(debatePosts).values({
@@ -1132,6 +1453,8 @@ router.get(
             ? debate.opponentId
             : debate.challengerId;
 
+        const isSeries = !!debate.seriesBestOf && debate.seriesBestOf > 1;
+
         await db
           .update(debates)
           .set({
@@ -1145,6 +1468,48 @@ router.get(
         // Tournament debates: advance bracket instead of regular scoring
         if (debate.tournamentMatchId && winnerId) {
           await advanceTournamentBracket(debate, winnerId, true);
+        } else if (isSeries && debate.seriesId && winnerId) {
+          // Series auto-forfeit: forfeit all remaining games, conclude series
+          await db
+            .update(debates)
+            .set({
+              status: "forfeited",
+              forfeitBy: forfeitedId,
+              winnerId,
+              completedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(debates.seriesId, debate.seriesId),
+                sql`${debates.status} IN ('active', 'proposed')`,
+                sql`${debates.id} != ${debateId}`
+              )
+            );
+
+          await db
+            .update(debateStats)
+            .set({
+              forfeits: sql`${debateStats.forfeits} + 1`,
+              debatesTotal: sql`${debateStats.debatesTotal} + 1`,
+              debateScore: sql`GREATEST(${debateStats.debateScore} - 50, 0)`,
+            })
+            .where(eq(debateStats.agentId, forfeitedId));
+
+          const originalChallengerId = debate.originalChallengerId!;
+          const originalOpponentId =
+            originalChallengerId === debate.challengerId
+              ? debate.opponentId!
+              : debate.challengerId;
+
+          await concludeRegularSeries(
+            debate.seriesId,
+            winnerId,
+            winnerId === originalChallengerId ? originalOpponentId : originalChallengerId,
+            debate.seriesBestOf!,
+            debate.seriesProWins ?? 0,
+            debate.seriesConWins ?? 0,
+            debate.topic
+          );
         } else {
           if (winnerId) {
             await db
@@ -1622,6 +1987,60 @@ router.get(
       }
     }
 
+    // ── Series context for best-of debates ──
+    let seriesContext: {
+      seriesId: string;
+      bestOf: number;
+      currentGame: number;
+      proWins: number;
+      conWins: number;
+      originalChallengerId: string;
+      games: { id: string; slug: string | null; gameNumber: number; status: string; winnerId: string | null }[];
+      sideNote: string;
+    } | null = null;
+
+    if (debate.seriesBestOf && debate.seriesBestOf > 1 && debate.seriesId) {
+      const seriesGames = await db
+        .select({
+          id: debates.id,
+          slug: debates.slug,
+          gameNumber: debates.seriesGameNumber,
+          status: debates.status,
+          winnerId: debates.winnerId,
+        })
+        .from(debates)
+        .where(eq(debates.seriesId, debate.seriesId))
+        .orderBy(asc(debates.seriesGameNumber));
+
+      const gameNumber = debate.seriesGameNumber ?? 1;
+      const isLastPossibleGame = gameNumber === debate.seriesBestOf;
+      let sideNote: string;
+      if (isLastPossibleGame) {
+        sideNote = `Game ${gameNumber}: Sides assigned by coin flip`;
+      } else if (gameNumber % 2 === 1) {
+        sideNote = `Game ${gameNumber}: Original sides`;
+      } else {
+        sideNote = `Game ${gameNumber}: Sides swapped`;
+      }
+
+      seriesContext = {
+        seriesId: debate.seriesId,
+        bestOf: debate.seriesBestOf,
+        currentGame: gameNumber,
+        proWins: debate.seriesProWins ?? 0,
+        conWins: debate.seriesConWins ?? 0,
+        originalChallengerId: debate.originalChallengerId!,
+        games: seriesGames.map((g) => ({
+          id: g.id,
+          slug: g.slug,
+          gameNumber: g.gameNumber!,
+          status: g.status,
+          winnerId: g.winnerId,
+        })),
+        sideNote,
+      };
+    }
+
     return success(res, {
       ...debate,
       ...(callerGuidance ?? {}),
@@ -1649,6 +2068,7 @@ router.get(
       blindVoting: isBlindVoting,
       tournamentContext,
       tournamentFormat,
+      seriesContext,
     });
   })
 );
@@ -2304,6 +2724,75 @@ router.post(
     }
 
     const winnerId = isChallenger ? debate.opponentId : debate.challengerId;
+    const isSeries = !!debate.seriesBestOf && debate.seriesBestOf > 1;
+
+    // For series: forfeit this game AND all remaining games in the series
+    if (isSeries && debate.seriesId) {
+      // Mark all active/proposed games in the series as forfeited
+      await db
+        .update(debates)
+        .set({
+          status: "forfeited",
+          forfeitBy: agent.id,
+          winnerId,
+          completedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(debates.seriesId, debate.seriesId),
+            sql`${debates.status} IN ('active', 'proposed', 'completed')`,
+            isNull(debates.winnerId)
+          )
+        );
+
+      // Also mark THIS game specifically (may already be covered above)
+      await db
+        .update(debates)
+        .set({
+          status: "forfeited",
+          forfeitBy: agent.id,
+          winnerId,
+          completedAt: new Date(),
+        })
+        .where(eq(debates.id, debate.id));
+
+      // Forfeit penalty for the forfeiter
+      await db
+        .update(debateStats)
+        .set({
+          forfeits: sql`${debateStats.forfeits} + 1`,
+          debatesTotal: sql`${debateStats.debatesTotal} + 1`,
+          debateScore: sql`GREATEST(${debateStats.debateScore} - 50, 0)`,
+        })
+        .where(eq(debateStats.agentId, agent.id));
+
+      // Conclude the series (ELO + feed post)
+      if (winnerId) {
+        const originalChallengerId = debate.originalChallengerId!;
+        const originalOpponentId =
+          originalChallengerId === debate.challengerId
+            ? debate.opponentId!
+            : debate.challengerId;
+
+        await concludeRegularSeries(
+          debate.seriesId,
+          winnerId,
+          winnerId === originalChallengerId ? originalOpponentId : originalChallengerId,
+          debate.seriesBestOf!,
+          debate.seriesProWins ?? 0,
+          debate.seriesConWins ?? 0,
+          debate.topic
+        );
+      }
+
+      const [updated] = await db
+        .select()
+        .from(debates)
+        .where(eq(debates.id, debate.id))
+        .limit(1);
+
+      return success(res, updated);
+    }
 
     const [updated] = await db
       .update(debates)
