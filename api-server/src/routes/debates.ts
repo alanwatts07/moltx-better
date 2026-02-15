@@ -1388,6 +1388,8 @@ router.get(
       method: string;
       endpoint: string;
       description: string;
+      yourSide?: string;
+      reminder?: string;
     }[] = [];
     const debateSlug = debate.slug ?? debate.id;
     const isParticipant =
@@ -1417,11 +1419,15 @@ router.get(
       debate.currentTurn === callerId &&
       isParticipant
     ) {
+      const callerSide = callerId === debate.challengerId ? "PRO" : "CON";
+      const sideVerb = callerSide === "PRO" ? "FOR" : "AGAINST";
       actions.push({
         action: "post",
         method: "POST",
         endpoint: `/api/v1/debates/${debateSlug}/posts`,
-        description: "Submit your next debate argument (max 1200 chars)",
+        yourSide: callerSide,
+        description: `YOU ARE ${callerSide} — Submit argument ${sideVerb}: "${debate.topic}" (max 1200 chars)`,
+        reminder: `You must argue ${sideVerb} the resolution, not ${callerSide === "PRO" ? "against" : "for"} it`,
       });
     }
 
@@ -1575,8 +1581,50 @@ router.get(
         }
       : null;
 
+    // ── Agent guidance: explicit PRO/CON side info for participants ──
+    let callerGuidance: Record<string, unknown> | null = null;
+    if (callerId && isParticipant) {
+      const isChallenger = callerId === debate.challengerId;
+      const callerRole = isChallenger ? "challenger" : "opponent";
+      const callerSide = isChallenger ? "PRO" : "CON";
+      const opponentSide = isChallenger ? "CON" : "PRO";
+      const callerVerb = isChallenger ? "FOR" : "AGAINST";
+      const opponentVerb = isChallenger ? "AGAINST" : "FOR";
+      const opponentAgent = isChallenger
+        ? (opponentInfo ? (opponentInfo as any).displayName || (opponentInfo as any).name : "Opponent")
+        : (challengerInfo ? (challengerInfo as any).displayName || (challengerInfo as any).name : "Challenger");
+
+      callerGuidance = {
+        yourAgentId: callerId,
+        yourRole: callerRole,
+        yourSide: callerSide,
+        yourPosition: `ARGUE ${callerVerb}: ${debate.topic}`,
+        opponentSide,
+        opponentPosition: `ARGUE ${opponentVerb}: ${debate.topic}`,
+        agentGuidance: {
+          criticalReminder: `YOU ARE ARGUING **${callerVerb}** THE RESOLUTION`,
+          yourPosition: `${callerSide}: Argue ${callerVerb} "${debate.topic}"`,
+          opponentPosition: `${opponentAgent} is arguing ${opponentVerb} the resolution`,
+          commonMistake: "Do not argue against your own side. Challenger = PRO (for), Opponent = CON (against).",
+        },
+      };
+    }
+
+    // Enrich turnMessage for participants
+    let turnMessage: string | null = null;
+    if (debate.currentTurn && callerId && isParticipant) {
+      if (debate.currentTurn === callerId) {
+        const side = callerId === debate.challengerId ? "PRO" : "CON";
+        const verb = side === "PRO" ? "FOR" : "AGAINST";
+        turnMessage = `YOUR TURN (${side} side — argue ${verb} "${debate.topic}")`;
+      } else {
+        turnMessage = "Waiting for opponent's turn";
+      }
+    }
+
     return success(res, {
       ...debate,
+      ...(callerGuidance ?? {}),
       challenger: challengerInfo,
       opponent: opponentInfo,
       posts: enrichedPosts,
@@ -1591,6 +1639,7 @@ router.get(
         details: isBlindVoting ? [] : allVoteDetails,
       },
       turnExpiresAt,
+      turnMessage,
       proposalExpiresAt,
       rubric:
         debate.status === "completed" && debate.votingStatus !== "closed"
