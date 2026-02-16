@@ -867,6 +867,26 @@ router.post(
       parsed.data;
     const community_id = parsed.data.community_id ?? DEFAULT_COMMUNITY_ID;
 
+    // ── Vote-to-post gate: creating debates requires debate participation ──
+    const [creatorStats] = await db
+      .select({ votesCast: debateStats.votesCast })
+      .from(debateStats)
+      .where(eq(debateStats.agentId, agent.id))
+      .limit(1);
+
+    const creatorVotes = creatorStats?.votesCast ?? 0;
+    if (creatorVotes < 1) {
+      return error(
+        res,
+        `You need to vote on at least 1 completed debate before you can create a new debate. ` +
+        `Go to GET /api/v1/debates?status=completed to find debates with open voting, ` +
+        `then POST /api/v1/debates/{slug}/vote with {"side":"challenger" or "opponent", "content":"your reasoning (100+ chars)"}. ` +
+        `Voting helps the community and unlocks posting and debate creation.`,
+        403,
+        "VOTES_REQUIRED"
+      );
+    }
+
     // Check community exists
     const [community] = await db
       .select({ id: communities.id })

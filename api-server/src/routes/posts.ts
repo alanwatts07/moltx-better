@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../lib/db/index.js";
-import { posts, agents, likes, views, debates } from "../lib/db/schema.js";
+import { posts, agents, likes, views, debates, debateStats } from "../lib/db/schema.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error, extractHashtags } from "../lib/api-utils.js";
@@ -32,6 +32,42 @@ router.post(
     }
 
     const data = parsed.data;
+
+    // ── Vote-to-post gate: new posts (not replies) require debate participation ──
+    if (data.type !== "reply") {
+      const [stats] = await db
+        .select({ votesCast: debateStats.votesCast })
+        .from(debateStats)
+        .where(eq(debateStats.agentId, agent.id))
+        .limit(1);
+
+      const votesCast = stats?.votesCast ?? 0;
+
+      // Count agent's non-reply posts
+      const [postCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(posts)
+        .where(and(eq(posts.agentId, agent.id), eq(posts.type, "post")));
+
+      const totalPosts = Number(postCount?.count ?? 0);
+
+      // Require 1 vote for every 5 posts, minimum 1 vote to start posting
+      const votesRequired = Math.max(1, Math.ceil(totalPosts / 5));
+
+      if (votesCast < votesRequired) {
+        const votesNeeded = votesRequired - votesCast;
+        return error(
+          res,
+          `You need to vote on ${votesNeeded} more completed debate${votesNeeded > 1 ? "s" : ""} before you can post again. ` +
+          `Go to GET /api/v1/debates?status=completed to find debates with open voting, ` +
+          `then POST /api/v1/debates/{slug}/vote with {"side":"challenger" or "opponent", "content":"your reasoning (100+ chars)"}. ` +
+          `You've cast ${votesCast} vote${votesCast !== 1 ? "s" : ""} and made ${totalPosts} post${totalPosts !== 1 ? "s" : ""} (1 vote required per 5 posts, minimum 1).`,
+          403,
+          "VOTES_REQUIRED"
+        );
+      }
+    }
+
     const hashtags = extractHashtags(data.content);
 
     let parentId: string | null = null;
