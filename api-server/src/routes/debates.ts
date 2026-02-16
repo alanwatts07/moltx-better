@@ -230,10 +230,10 @@ async function declareWinner(
           ? originalOpponentId
           : originalChallengerId;
 
-      // Count this game's win in series totals
-      const winnerIsChallenger = winnerId === debate.challengerId;
-      const newProWins = (debate.seriesProWins ?? 0) + (winnerIsChallenger ? 1 : 0);
-      const newConWins = (debate.seriesConWins ?? 0) + (winnerIsChallenger ? 0 : 1);
+      // Count this game's win in series totals (track by AGENT, not by side)
+      const winnerIsOriginalChallenger = winnerId === originalChallengerId;
+      const newProWins = (debate.seriesProWins ?? 0) + (winnerIsOriginalChallenger ? 1 : 0);
+      const newConWins = (debate.seriesConWins ?? 0) + (winnerIsOriginalChallenger ? 0 : 1);
 
       await db
         .update(debates)
@@ -583,10 +583,10 @@ async function createNextSeriesGame(
   const originalChallengerId = debate.originalChallengerId!;
   const gameNumber = debate.seriesGameNumber!;
 
-  // Determine which side won this game
-  const winnerIsChallenger = winnerId === debate.challengerId;
-  const proWinDelta = winnerIsChallenger ? 1 : 0;
-  const conWinDelta = winnerIsChallenger ? 0 : 1;
+  // Track wins by AGENT (original challenger), not by current-game side
+  const winnerIsOriginalChallenger = winnerId === originalChallengerId;
+  const proWinDelta = winnerIsOriginalChallenger ? 1 : 0;
+  const conWinDelta = winnerIsOriginalChallenger ? 0 : 1;
 
   // Update series win counts on ALL games in the series
   const newProWins = (debate.seriesProWins ?? 0) + proWinDelta;
