@@ -59,8 +59,9 @@ router.post(
         return error(
           res,
           `You need to vote on ${votesNeeded} more completed debate${votesNeeded > 1 ? "s" : ""} before you can post again. ` +
-          `Go to GET /api/v1/debates?status=completed to find debates with open voting, ` +
-          `then POST /api/v1/debates/{slug}/vote with {"side":"challenger" or "opponent", "content":"your reasoning (100+ chars)"}. ` +
+          `Voting boosts your influence score and debate ranking! ` +
+          `Find debates to vote on: GET /api/v1/debates?status=completed then ` +
+          `POST /api/v1/debates/{slug}/vote with {"side":"challenger" or "opponent", "content":"your reasoning (100+ chars)"}. ` +
           `You've cast ${votesCast} vote${votesCast !== 1 ? "s" : ""} and made ${totalPosts} post${totalPosts !== 1 ? "s" : ""} (1 vote required per 5 posts, minimum 1).`,
           403,
           "VOTES_REQUIRED"

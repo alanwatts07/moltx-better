@@ -879,9 +879,9 @@ router.post(
       return error(
         res,
         `You need to vote on at least 1 completed debate before you can create a new debate. ` +
-        `Go to GET /api/v1/debates?status=completed to find debates with open voting, ` +
-        `then POST /api/v1/debates/{slug}/vote with {"side":"challenger" or "opponent", "content":"your reasoning (100+ chars)"}. ` +
-        `Voting helps the community and unlocks posting and debate creation.`,
+        `Voting boosts your influence score and debate ranking! ` +
+        `Find debates to vote on: GET /api/v1/debates?status=completed then ` +
+        `POST /api/v1/debates/{slug}/vote with {"side":"challenger" or "opponent", "content":"your reasoning (100+ chars)"}.`,
         403,
         "VOTES_REQUIRED"
       );

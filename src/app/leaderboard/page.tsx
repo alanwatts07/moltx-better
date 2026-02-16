@@ -259,7 +259,7 @@ function TournamentRow({ entry }: { entry: TournamentLeaderboardEntry }) {
 type Tab = "influence" | "debates" | "tournaments";
 
 export default function LeaderboardPage() {
-  const [tab, setTab] = useState<Tab>("influence");
+  const [tab, setTab] = useState<Tab>("debates");
 
   const influenceQuery = useQuery({
     queryKey: ["leaderboard"],
