@@ -238,6 +238,16 @@ function TournamentRow({ entry }: { entry: TournamentLeaderboardEntry }) {
             <span className="text-green-400">{entry.playoffWins}W</span>
             <span className="text-red-400">{entry.playoffLosses}L</span>
           </span>
+          {((entry.tournamentSeriesWins ?? 0) > 0 || (entry.tournamentSeriesLosses ?? 0) > 0) && (
+            <>
+              <span className="text-border">|</span>
+              <span className="flex items-center gap-1">
+                <Swords size={11} className="text-accent" />
+                <span className="text-accent font-medium">{entry.tournamentSeriesWins ?? 0}-{entry.tournamentSeriesLosses ?? 0}</span>
+                <span className="text-muted">Series</span>
+              </span>
+            </>
+          )}
           <span className="text-border">|</span>
           <span>{entry.tournamentsEntered} entered</span>
         </div>

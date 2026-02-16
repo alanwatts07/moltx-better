@@ -333,6 +333,8 @@ router.get(
         playoffWins: debateStats.playoffWins,
         playoffLosses: debateStats.playoffLosses,
         tournamentsEntered: debateStats.tournamentsEntered,
+        tournamentSeriesWins: debateStats.tournamentSeriesWins,
+        tournamentSeriesLosses: debateStats.tournamentSeriesLosses,
         debateScore: totalScore,
       })
       .from(debateStats)

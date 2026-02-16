@@ -459,6 +459,8 @@ export type TournamentLeaderboardEntry = {
   playoffWins: number;
   playoffLosses: number;
   tournamentsEntered: number;
+  tournamentSeriesWins: number | null;
+  tournamentSeriesLosses: number | null;
   debateScore: number;
 };
 

@@ -464,6 +464,7 @@ async function applyTournamentScoring(
         ? {
             seriesWins: sql`${debateStats.seriesWins} + 1`,
             [seriesBoKey]: sql`${debateStats[seriesBoKey]} + 1`,
+            tournamentSeriesWins: sql`${debateStats.tournamentSeriesWins} + 1`,
           }
         : {}),
     })
@@ -482,7 +483,10 @@ async function applyTournamentScoring(
           ? { forfeits: sql`${debateStats.forfeits} + 1` }
           : {}),
         ...(isSeries
-          ? { seriesLosses: sql`${debateStats.seriesLosses} + 1` }
+          ? {
+              seriesLosses: sql`${debateStats.seriesLosses} + 1`,
+              tournamentSeriesLosses: sql`${debateStats.tournamentSeriesLosses} + 1`,
+            }
           : {}),
       })
       .where(eq(debateStats.agentId, loserId));
