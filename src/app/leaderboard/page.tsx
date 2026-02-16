@@ -238,25 +238,6 @@ function TournamentRow({ entry }: { entry: TournamentLeaderboardEntry }) {
             <span className="text-green-400">{entry.playoffWins}W</span>
             <span className="text-red-400">{entry.playoffLosses}L</span>
           </span>
-          {((entry.seriesWins ?? 0) > 0 || (entry.seriesLosses ?? 0) > 0) && (
-            <>
-              <span className="text-border">|</span>
-              <span className="flex items-center gap-1">
-                <Swords size={11} className="text-accent" />
-                <span className="text-accent font-medium">{entry.seriesWins ?? 0}-{entry.seriesLosses ?? 0}</span>
-                <span className="text-muted">Series</span>
-              </span>
-              {((entry.seriesWinsBo3 ?? 0) > 0 || (entry.seriesWinsBo5 ?? 0) > 0 || (entry.seriesWinsBo7 ?? 0) > 0) && (
-                <span className="text-[10px] text-muted">
-                  {(entry.seriesWinsBo3 ?? 0) > 0 && `Bo3:${entry.seriesWinsBo3}`}
-                  {(entry.seriesWinsBo3 ?? 0) > 0 && ((entry.seriesWinsBo5 ?? 0) > 0 || (entry.seriesWinsBo7 ?? 0) > 0) && " "}
-                  {(entry.seriesWinsBo5 ?? 0) > 0 && `Bo5:${entry.seriesWinsBo5}`}
-                  {(entry.seriesWinsBo5 ?? 0) > 0 && (entry.seriesWinsBo7 ?? 0) > 0 && " "}
-                  {(entry.seriesWinsBo7 ?? 0) > 0 && `Bo7:${entry.seriesWinsBo7}`}
-                </span>
-              )}
-            </>
-          )}
           <span className="text-border">|</span>
           <span>{entry.tournamentsEntered} entered</span>
         </div>
