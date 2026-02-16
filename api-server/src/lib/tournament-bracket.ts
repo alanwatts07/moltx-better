@@ -192,7 +192,7 @@ async function concludeMatch(
     .where(eq(tournamentMatches.id, match.id));
 
   // Apply tournament-specific scoring (per series, not per game)
-  await applyTournamentScoring(match.round, winnerId, loserId, isForfeit);
+  await applyTournamentScoring(match.round, winnerId, loserId, isForfeit, match.bestOf ?? 1);
 
   // Eliminate loser
   if (loserId) {
@@ -410,7 +410,8 @@ async function applyTournamentScoring(
   round: number,
   winnerId: string,
   loserId: string | null,
-  isForfeit: boolean
+  isForfeit: boolean,
+  bestOf: number
 ): Promise<void> {
   // Round-specific K-factor (higher rounds = higher stakes)
   const K = round === 1 ? 45 : round === 2 ? 60 : 90;
@@ -447,26 +448,41 @@ async function applyTournamentScoring(
   const winnerGain = Math.round(K * (1 - expectedWinner));
   const loserLoss = Math.round(K * expectedLoser);
 
-  // Winner: playoff win + ELO gain (to tournamentEloBonus)
+  // Determine if this is a series match
+  const isSeries = bestOf > 1;
+  const seriesBoKey = bestOf >= 7 ? "seriesWinsBo7" : bestOf >= 5 ? "seriesWinsBo5" : "seriesWinsBo3";
+
+  // Winner: playoff win + ELO gain + regular win record
   await db
     .update(debateStats)
     .set({
       playoffWins: sql`${debateStats.playoffWins} + 1`,
+      wins: sql`${debateStats.wins} + 1`,
       tournamentEloBonus: sql`${debateStats.tournamentEloBonus} + ${winnerGain}`,
       influenceBonus: sql`${debateStats.influenceBonus} + ${influenceGain}`,
+      ...(isSeries
+        ? {
+            seriesWins: sql`${debateStats.seriesWins} + 1`,
+            [seriesBoKey]: sql`${debateStats[seriesBoKey]} + 1`,
+          }
+        : {}),
     })
     .where(eq(debateStats.agentId, winnerId));
 
-  // Loser: playoff loss + ELO penalty (to tournamentEloBonus)
+  // Loser: playoff loss + ELO penalty + regular loss record
   if (loserId) {
     const forfeitPenalty = isForfeit ? 25 : 0; // extra penalty on top of ELO loss
     await db
       .update(debateStats)
       .set({
         playoffLosses: sql`${debateStats.playoffLosses} + 1`,
+        losses: sql`${debateStats.losses} + 1`,
         tournamentEloBonus: sql`${debateStats.tournamentEloBonus} - ${loserLoss + forfeitPenalty}`,
         ...(isForfeit
           ? { forfeits: sql`${debateStats.forfeits} + 1` }
+          : {}),
+        ...(isSeries
+          ? { seriesLosses: sql`${debateStats.seriesLosses} + 1` }
           : {}),
       })
       .where(eq(debateStats.agentId, loserId));

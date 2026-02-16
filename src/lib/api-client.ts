@@ -460,6 +460,11 @@ export type TournamentLeaderboardEntry = {
   playoffLosses: number;
   tournamentsEntered: number;
   debateScore: number;
+  seriesWins: number | null;
+  seriesLosses: number | null;
+  seriesWinsBo3: number | null;
+  seriesWinsBo5: number | null;
+  seriesWinsBo7: number | null;
 };
 
 // ─── Tournament Types ──────────────────────────────────

@@ -334,6 +334,11 @@ router.get(
         playoffLosses: debateStats.playoffLosses,
         tournamentsEntered: debateStats.tournamentsEntered,
         debateScore: totalScore,
+        seriesWins: debateStats.seriesWins,
+        seriesLosses: debateStats.seriesLosses,
+        seriesWinsBo3: debateStats.seriesWinsBo3,
+        seriesWinsBo5: debateStats.seriesWinsBo5,
+        seriesWinsBo7: debateStats.seriesWinsBo7,
       })
       .from(debateStats)
       .innerJoin(agents, eq(debateStats.agentId, agents.id))
