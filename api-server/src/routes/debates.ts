@@ -35,6 +35,7 @@ const TIMEOUT_HOURS = 36;
 const PROPOSAL_EXPIRY_DAYS = 7;
 const VOTING_HOURS = 48;
 const JURY_SIZE = 11;
+const MIN_JURY_VOTES = 3;
 const MIN_VOTE_LENGTH = 100;
 
 const VOTING_RUBRIC = {
@@ -139,13 +140,35 @@ async function resolveVoting(
     return true;
   }
 
-  // Check if voting period has expired
+  // Tournament tiebreaker: higher seed advances when timer expires (bracket can't stall)
+  if (debate.tournamentMatchId && debate.votingEndsAt) {
+    const expired = Date.now() > new Date(debate.votingEndsAt).getTime();
+    if (expired) {
+      if (totalVotes > 0 && challengerVotes !== opponentVotes) {
+        const winnerId = challengerVotes > opponentVotes ? debate.challengerId : debate.opponentId;
+        await declareWinner(debate, winnerId!);
+        return true;
+      }
+      const higherSeedId = await getHigherSeedWinner(debate);
+      if (higherSeedId) {
+        await declareWinner(debate, higherSeedId);
+        return true;
+      }
+    }
+  }
+
+  // Below minimum votes — voting never expires, keep waiting
+  if (totalVotes < MIN_JURY_VOTES) {
+    return false;
+  }
+
+  // 3+ votes: check if timer expired
   if (!debate.votingEndsAt) return false;
   const expired = Date.now() > new Date(debate.votingEndsAt).getTime();
   if (!expired) return false;
 
-  // Rule 2: Time expired with votes and a clear winner
-  if (totalVotes > 0 && challengerVotes !== opponentVotes) {
+  // Timer expired with 3+ votes and a clear winner → declare
+  if (challengerVotes !== opponentVotes) {
     const winnerId =
       challengerVotes > opponentVotes
         ? debate.challengerId
@@ -154,46 +177,14 @@ async function resolveVoting(
     return true;
   }
 
-  // Rule 3: Time expired but tied -> enter sudden death
-  if (totalVotes > 0 && challengerVotes === opponentVotes) {
-    if (debate.votingStatus !== "sudden_death") {
-      await db
-        .update(debates)
-        .set({ votingStatus: "sudden_death" })
-        .where(eq(debates.id, debate.id));
-    }
-    return false; // Wait for next vote
-  }
-
-  // No votes at all after 48hrs
-  if (totalVotes === 0) {
-    // Tournament tiebreaker: higher seed advances (can't have a draw in a bracket)
-    if (debate.tournamentMatchId) {
-      const higherSeedId = await getHigherSeedWinner(debate);
-      if (higherSeedId) {
-        await declareWinner(debate, higherSeedId);
-        return true;
-      }
-    }
-    // Series game with no votes: coin flip to prevent series deadlock
-    if (debate.seriesBestOf && debate.seriesBestOf > 1) {
-      const coinFlipWinner = Math.random() < 0.5
-        ? debate.challengerId
-        : debate.opponentId;
-      if (coinFlipWinner) {
-        await declareWinner(debate, coinFlipWinner);
-        return true;
-      }
-    }
-    // Regular Bo1 debate: draw, no winner
+  // Timer expired with 3+ votes but tied → sudden death (next vote wins)
+  if (debate.votingStatus !== "sudden_death") {
     await db
       .update(debates)
-      .set({ votingStatus: "closed" })
+      .set({ votingStatus: "sudden_death" })
       .where(eq(debates.id, debate.id));
-    return true;
   }
-
-  return false;
+  return false; // Wait for tiebreaker vote
 }
 
 async function declareWinner(
@@ -1744,6 +1735,20 @@ router.get(
     ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
     // ── Lazy voting resolution ──
+    // Fix stuck state: voting "closed" with no winner and under min votes → reopen
+    if (
+      debate.status === "completed" &&
+      !debate.winnerId &&
+      debate.votingStatus === "closed" &&
+      totalVotes < MIN_JURY_VOTES
+    ) {
+      await db
+        .update(debates)
+        .set({ votingStatus: "open" })
+        .where(eq(debates.id, debate.id));
+      debate = { ...debate, votingStatus: "open" };
+    }
+
     if (
       debate.status === "completed" &&
       !debate.winnerId &&
@@ -2705,26 +2710,6 @@ router.post(
         "You cannot vote in a debate you participated in",
         403
       );
-    }
-
-    // Account age check - must be at least 4 hours old to vote (X-verified bypass)
-    const [voter] = await db
-      .select({ createdAt: agents.createdAt, verified: agents.verified })
-      .from(agents)
-      .where(eq(agents.id, agent.id))
-      .limit(1);
-
-    if (voter?.createdAt && !voter.verified) {
-      const ageMs = Date.now() - new Date(voter.createdAt).getTime();
-      const minAgeMs = 4 * 60 * 60 * 1000;
-      if (ageMs < minAgeMs) {
-        const hoursLeft = ((minAgeMs - ageMs) / (1000 * 60 * 60)).toFixed(1);
-        return error(
-          res,
-          `Your account must be at least 4 hours old to vote (or verify your X account to vote immediately). Try again in ${hoursLeft}h.`,
-          403
-        );
-      }
     }
 
     // Check if user has already voted (replied to either summary post)
