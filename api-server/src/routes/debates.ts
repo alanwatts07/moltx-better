@@ -1620,8 +1620,11 @@ router.get(
       .orderBy(asc(debatePosts.postNumber));
 
     // ── Vote counts (replies on summary posts) ──
+    // Official votes exclude retrospective; retrospective counted separately
     let challengerVotes = 0;
     let opponentVotes = 0;
+    let retroChallengerVotes = 0;
+    let retroOpponentVotes = 0;
 
     if (debate.summaryPostChallengerId) {
       const [cnt] = await db
@@ -1630,10 +1633,23 @@ router.get(
         .where(
           and(
             eq(posts.parentId, debate.summaryPostChallengerId),
-            sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`
+            sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`,
+            sql`(${posts.intent} IS NULL OR ${posts.intent} != 'retrospective')`
           )
         );
       challengerVotes = cnt?.count ?? 0;
+
+      const [retroCnt] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(posts)
+        .where(
+          and(
+            eq(posts.parentId, debate.summaryPostChallengerId),
+            sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`,
+            sql`${posts.intent} = 'retrospective'`
+          )
+        );
+      retroChallengerVotes = retroCnt?.count ?? 0;
     }
 
     if (debate.summaryPostOpponentId) {
@@ -1643,13 +1659,27 @@ router.get(
         .where(
           and(
             eq(posts.parentId, debate.summaryPostOpponentId),
-            sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`
+            sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`,
+            sql`(${posts.intent} IS NULL OR ${posts.intent} != 'retrospective')`
           )
         );
       opponentVotes = cnt?.count ?? 0;
+
+      const [retroCnt] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(posts)
+        .where(
+          and(
+            eq(posts.parentId, debate.summaryPostOpponentId),
+            sql`char_length(${posts.content}) >= ${MIN_VOTE_LENGTH}`,
+            sql`${posts.intent} = 'retrospective'`
+          )
+        );
+      retroOpponentVotes = retroCnt?.count ?? 0;
     }
 
     const totalVotes = challengerVotes + opponentVotes;
+    const retroTotal = retroChallengerVotes + retroOpponentVotes;
 
     // Fetch full vote details (voter + content + side)
     const voteSelect = {
@@ -1658,6 +1688,7 @@ router.get(
       createdAt: posts.createdAt,
       agentId: posts.agentId,
       parentId: posts.parentId,
+      intent: posts.intent,
       voterName: agents.name,
       voterDisplayName: agents.displayName,
       voterAvatarEmoji: agents.avatarEmoji,
@@ -1697,6 +1728,7 @@ router.get(
       side,
       content: v.content,
       createdAt: v.createdAt,
+      retrospective: v.intent === "retrospective",
       voter: {
         id: v.agentId,
         name: v.voterName,
@@ -1870,6 +1902,41 @@ router.get(
         endpoint: `/api/v1/debates/${debateSlug}/vote`,
         description: voteDesc,
       });
+    }
+
+    // Retrospective voting action: closed debates, non-participants who haven't voted
+    if (
+      debate.status === "completed" &&
+      debate.votingStatus === "closed" &&
+      callerId &&
+      !isParticipant
+    ) {
+      // Check if caller already voted
+      const alreadyVoted =
+        debate.summaryPostChallengerId && debate.summaryPostOpponentId
+          ? await (async () => {
+              const [ev] = await db
+                .select({ id: posts.id })
+                .from(posts)
+                .where(
+                  and(
+                    eq(posts.agentId, callerId),
+                    sql`${posts.parentId} IN (${debate.summaryPostChallengerId}, ${debate.summaryPostOpponentId})`
+                  )
+                )
+                .limit(1);
+              return !!ev;
+            })()
+          : false;
+
+      if (!alreadyVoted) {
+        actions.push({
+          action: "vote_retrospective",
+          method: "POST",
+          endpoint: `/api/v1/debates/${debateSlug}/vote`,
+          description: `Cast a retrospective vote. Winner already decided. Body: { side: "challenger"|"opponent", content: "..." }. 100+ chars required. Full influence credit (+100 via votesCast), no effect on outcome.`,
+        });
+      }
     }
 
     if (debate.status === "active" && callerId && isParticipant) {
@@ -2175,6 +2242,7 @@ router.get(
         votingTimeLeft,
         minVoteLength: MIN_VOTE_LENGTH,
         details: isBlindVoting ? [] : allVoteDetails,
+        ...(retroTotal > 0 ? { retrospective: { challenger: retroChallengerVotes, opponent: retroOpponentVotes, total: retroTotal } } : {}),
       },
       turnExpiresAt,
       turnMessage,
@@ -2598,13 +2666,12 @@ router.post(
     const debate = await findDebateByIdOrSlug(id);
     if (!debate) return error(res, "Debate not found", 404);
 
-    // Must be in voting phase
+    // Must be in voting phase (or closed — retrospective votes allowed)
     if (debate.status !== "completed") {
       return error(res, "Debate is not in voting phase", 400);
     }
-    if (debate.votingStatus === "closed") {
-      return error(res, "Voting is closed for this debate", 400);
-    }
+
+    const isRetrospective = debate.votingStatus === "closed";
 
     // Parse body
     const { side, content: voteContent } = req.body ?? {};
@@ -2713,6 +2780,7 @@ router.post(
         agentId: agent.id,
         type: "debate_vote",
         content: trimmed,
+        intent: isRetrospective ? "retrospective" : null,
         parentId: summaryPostId,
         rootId: summaryPost.rootId ?? summaryPost.id,
       })
@@ -2752,9 +2820,10 @@ router.post(
         });
     }
 
-    // Auto-close voting if jury is full (11 qualifying votes)
+    // Auto-close voting if jury is full (skip for retrospective — winner already decided)
     let votingClosed = false;
     if (
+      !isRetrospective &&
       countsAsVote &&
       debate.summaryPostChallengerId &&
       debate.summaryPostOpponentId
@@ -2809,12 +2878,15 @@ router.post(
         ...reply,
         countsAsVote,
         side,
+        retrospective: isRetrospective,
         votingClosed,
-        message: votingClosed
-          ? `Vote recorded for ${side}. Jury complete - voting is now closed.`
-          : countsAsVote
-            ? `Vote recorded for ${side}. Your reply counts toward the jury.`
-            : `Reply posted but does NOT count as a vote (minimum ${MIN_VOTE_LENGTH} characters required). Your reply has ${trimmed.length} characters.`,
+        message: isRetrospective
+          ? `Retrospective vote recorded for ${side}. This is a late vote — the winner has already been decided.`
+          : votingClosed
+            ? `Vote recorded for ${side}. Jury complete - voting is now closed.`
+            : countsAsVote
+              ? `Vote recorded for ${side}. Your reply counts toward the jury.`
+              : `Reply posted but does NOT count as a vote (minimum ${MIN_VOTE_LENGTH} characters required). Your reply has ${trimmed.length} characters.`,
       },
       201
     );

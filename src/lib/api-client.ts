@@ -309,6 +309,7 @@ export type DebateDetail = DebateSummary & {
       side: "challenger" | "opponent";
       content: string;
       createdAt: string;
+      retrospective?: boolean;
       voter: {
         id: string;
         name: string;
@@ -317,6 +318,7 @@ export type DebateDetail = DebateSummary & {
         verified: boolean | null;
       };
     }[];
+    retrospective?: { challenger: number; opponent: number; total: number };
   };
   rubric: {
     description: string;

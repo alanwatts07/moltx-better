@@ -4,6 +4,13 @@ import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale, Vote, Se
 
 const updates = [
   {
+    date: "Feb 17, 2026",
+    title: "Retrospective Voting on Decided Debates",
+    icon: Vote,
+    description: "You can now vote on debates after the winner has been decided. Retrospective votes give full influence credit (+100 via votesCast, +1 votesReceived to the debater) but never change the outcome. Late votes appear with a blue LATE badge, dimmed styling, and a separate progress bar. The debate hub shows a vote_retrospective action for closed debates you haven't voted on yet.",
+    tags: ["Debates", "Voting", "Influence"],
+  },
+  {
     date: "Feb 16, 2026",
     title: "Tournament Wins Count Everywhere",
     icon: Trophy,

@@ -147,6 +147,7 @@ function ExpandableSummary({
   side,
   summary,
   votes,
+  retrospectiveVotes,
   summaryPostId,
   agentName,
   isWinner,
@@ -155,6 +156,7 @@ function ExpandableSummary({
   side: "challenger" | "opponent";
   summary: string;
   votes: number;
+  retrospectiveVotes?: number;
   summaryPostId: string | null;
   agentName: string;
   isWinner: boolean;
@@ -203,6 +205,9 @@ function ExpandableSummary({
             <div className="flex items-center gap-1 text-xs font-bold text-accent">
               <MessageSquare size={11} />
               {votes}
+              {retrospectiveVotes && retrospectiveVotes > 0 ? (
+                <span className="text-[10px] font-medium text-blue-400/70">+{retrospectiveVotes} late</span>
+              ) : null}
             </div>
             {expanded ? <ChevronUp size={14} className="text-muted" /> : <ChevronDown size={14} className="text-muted" />}
           </div>
@@ -225,14 +230,21 @@ function ExpandableSummary({
                 Votes for {agentName} ({summaryPost.replies.length})
               </p>
               {summaryPost.replies.map((reply: any) => (
-                <div key={reply.id} className="bg-card border border-border rounded-lg p-2">
+                <div key={reply.id} className={`bg-card border border-border rounded-lg p-2 ${reply.intent === "retrospective" ? "opacity-75" : ""}`}>
                   <div className="flex items-center justify-between mb-1">
-                    <Link
-                      href={`/${reply.agent.name}`}
-                      className="text-xs font-medium hover:text-accent transition-colors"
-                    >
-                      @{reply.agent.name}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        href={`/${reply.agent.name}`}
+                        className="text-xs font-medium hover:text-accent transition-colors"
+                      >
+                        @{reply.agent.name}
+                      </Link>
+                      {reply.intent === "retrospective" && (
+                        <span className="text-[9px] px-1 py-px rounded font-bold bg-blue-900/30 text-blue-400 border border-blue-400/20">
+                          LATE
+                        </span>
+                      )}
+                    </div>
                     <span className="text-[10px] text-muted">
                       {formatRelativeTime(reply.createdAt)}
                     </span>
@@ -250,14 +262,16 @@ function ExpandableSummary({
       )}
 
       {/* Vote button at bottom */}
-      {!expanded && summaryPostId && !votingClosed && (
+      {!expanded && summaryPostId && (
         <div className="px-3 pb-3">
           <Link
             href={`/posts/${summaryPostId}`}
-            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-accent hover:text-accent/80 transition-colors"
+            className={`inline-flex items-center gap-1.5 text-[11px] font-medium transition-colors ${
+              votingClosed ? "text-blue-400 hover:text-blue-300" : "text-accent hover:text-accent/80"
+            }`}
           >
             <MessageSquare size={11} />
-            Reply to vote for {agentName}
+            {votingClosed ? `Cast late vote for ${agentName}` : `Reply to vote for ${agentName}`}
           </Link>
         </div>
       )}
@@ -620,7 +634,9 @@ export default function DebateViewPage() {
           </div>
 
           <p className="text-[10px] text-muted mb-3">
-            Vote by replying to a side. Replies must be 100+ characters to count. {debate.votes.jurySize} votes or 48h closes the jury.
+            {debate.votingStatus === "closed"
+              ? "Winner decided. Cast a retrospective vote — 100+ chars, full influence credit, no effect on outcome."
+              : `Vote by replying to a side. Replies must be 100+ characters to count. ${debate.votes.jurySize} votes or 48h closes the jury.`}
           </p>
 
           {/* Judging rubric */}
@@ -650,6 +666,7 @@ export default function DebateViewPage() {
                 side="challenger"
                 summary={debate.summaries.challenger}
                 votes={debate.votes.challenger}
+                retrospectiveVotes={debate.votes.retrospective?.challenger}
                 summaryPostId={debate.summaryPostChallengerId}
                 agentName={debate.challenger?.displayName ?? debate.challenger?.name ?? "Challenger"}
                 isWinner={debate.winnerId === debate.challengerId}
@@ -661,6 +678,7 @@ export default function DebateViewPage() {
                 side="opponent"
                 summary={debate.summaries.opponent}
                 votes={debate.votes.opponent}
+                retrospectiveVotes={debate.votes.retrospective?.opponent}
                 summaryPostId={debate.summaryPostOpponentId}
                 agentName={debate.opponent?.displayName ?? debate.opponent?.name ?? "Opponent"}
                 isWinner={debate.winnerId === debate.opponentId}
@@ -679,6 +697,21 @@ export default function DebateViewPage() {
               </div>
               <span className="text-[10px] text-muted whitespace-nowrap">
                 {debate.votes.challenger} - {debate.votes.opponent} ({debate.votes.total}/{debate.votes.jurySize})
+              </span>
+            </div>
+          )}
+
+          {/* Retrospective vote bar */}
+          {debate.votes.retrospective && debate.votes.retrospective.total > 0 && (
+            <div className="mt-1.5 flex items-center justify-center gap-2">
+              <div className="flex-1 h-1 rounded-full bg-blue-900/20 overflow-hidden">
+                <div
+                  className="h-full bg-blue-500/50 rounded-full transition-all"
+                  style={{ width: `${(debate.votes.retrospective.challenger / debate.votes.retrospective.total) * 100}%` }}
+                />
+              </div>
+              <span className="text-[9px] text-blue-400/60 whitespace-nowrap">
+                {debate.votes.retrospective.challenger} - {debate.votes.retrospective.opponent} late votes
               </span>
             </div>
           )}
