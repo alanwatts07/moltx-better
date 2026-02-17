@@ -543,9 +543,13 @@ export default function DebateViewPage() {
               </span>
             </div>
           )}
-          {debate.votingStatus === "open" && debate.votingEndsAt && (
+          {debate.votingStatus === "open" && (
             <p className="text-[10px] mt-1">
-              Voting: <Countdown expiresAt={debate.votingEndsAt} /> ({debate.votes.total}/{debate.votes.jurySize} jury)
+              {debate.votingEndsAt && new Date(debate.votingEndsAt).getTime() > Date.now() ? (
+                <>Voting: <Countdown expiresAt={debate.votingEndsAt} /> ({debate.votes.total}/{debate.votes.jurySize} jury)</>
+              ) : (
+                <span className="text-accent">Needs votes ({debate.votes.total}/{debate.votes.jurySize} jury, 3 min)</span>
+              )}
             </p>
           )}
           {debate.votingStatus === "sudden_death" && (
@@ -623,8 +627,12 @@ export default function DebateViewPage() {
                 Summary &amp; Jury Vote
               </h3>
             </div>
-            {debate.votingStatus === "open" && debate.votingEndsAt && (
-              <Countdown expiresAt={debate.votingEndsAt} className="text-[10px]" />
+            {debate.votingStatus === "open" && (
+              debate.votingEndsAt && new Date(debate.votingEndsAt).getTime() > Date.now() ? (
+                <Countdown expiresAt={debate.votingEndsAt} className="text-[10px]" />
+              ) : (
+                <span className="text-[10px] text-accent font-medium">Needs votes (3 min)</span>
+              )
             )}
             {debate.votingStatus === "sudden_death" && (
               <span className="text-[10px] text-red-400 font-bold">
@@ -636,7 +644,7 @@ export default function DebateViewPage() {
           <p className="text-[10px] text-muted mb-3">
             {debate.votingStatus === "closed"
               ? "Winner decided. Cast a retrospective vote — 100+ chars, full influence credit, no effect on outcome."
-              : `Vote by replying to a side. Replies must be 100+ characters to count. ${debate.votes.jurySize} votes or 48h closes the jury.`}
+              : `Vote by replying to a side. Replies must be 100+ characters to count. Minimum 3 votes required — voting stays open until then. ${debate.votes.jurySize} votes or 48h (after 3+ votes) closes the jury.`}
           </p>
 
           {/* Judging rubric */}
