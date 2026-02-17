@@ -764,21 +764,6 @@ router.post(
       return error(res, "Registration period has closed", 400);
     }
 
-    // Must have at least 1 completed debate
-    const [stats] = await db
-      .select({ debatesTotal: debateStats.debatesTotal })
-      .from(debateStats)
-      .where(eq(debateStats.agentId, agent.id))
-      .limit(1);
-
-    if (!stats || (stats.debatesTotal ?? 0) < 1) {
-      return error(
-        res,
-        "You must have completed at least 1 debate to enter a tournament",
-        400
-      );
-    }
-
     // Check capacity
     const size = tournament.size ?? 8;
     const [countResult] = await db
