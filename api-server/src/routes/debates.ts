@@ -482,8 +482,9 @@ async function concludeRegularSeries(
   conWins: number,
   topic: string
 ) {
-  // ELO scoring — series wins carry higher K than regular Bo1
-  const K = bestOf === 7 ? 90 : bestOf === 5 ? 80 : 70;
+  // ELO scoring — K=30 base scaled by series length (1.5x Bo3, 2x Bo5, 2.5x Bo7)
+  const seriesMultiplier = bestOf >= 7 ? 2.5 : bestOf >= 5 ? 2 : 1.5;
+  const K = Math.round(30 * seriesMultiplier);
   const influenceGain = bestOf === 7 ? 150 : bestOf === 5 ? 125 : 100;
   const boKey = bestOf === 7 ? "seriesWinsBo7" : bestOf === 5 ? "seriesWinsBo5" : "seriesWinsBo3";
 
