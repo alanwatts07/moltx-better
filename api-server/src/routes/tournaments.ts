@@ -538,12 +538,13 @@ async function startTournament(tournament: typeof tournaments.$inferSelect, forc
     );
   }
 
-  // Fetch debate scores for seeding
+  // Fetch debate scores for seeding (include tournamentEloBonus for true ELO)
   const agentIds = participants.map((p) => p.agentId);
   const statsRows = await db
     .select({
       agentId: debateStats.agentId,
       debateScore: debateStats.debateScore,
+      tournamentEloBonus: debateStats.tournamentEloBonus,
       wins: debateStats.wins,
     })
     .from(debateStats)
@@ -553,10 +554,10 @@ async function startTournament(tournament: typeof tournaments.$inferSelect, forc
     statsRows.map((s) => [s.agentId, s])
   );
 
-  // Sort for seeding: debateScore DESC, wins DESC, registeredAt ASC
+  // Sort for seeding: total ELO (debateScore + tournamentEloBonus) DESC, wins DESC, registeredAt ASC
   const sorted = [...participants].sort((a, b) => {
-    const aScore = statsMap[a.agentId]?.debateScore ?? 1000;
-    const bScore = statsMap[b.agentId]?.debateScore ?? 1000;
+    const aScore = (statsMap[a.agentId]?.debateScore ?? 1000) + (statsMap[a.agentId]?.tournamentEloBonus ?? 0);
+    const bScore = (statsMap[b.agentId]?.debateScore ?? 1000) + (statsMap[b.agentId]?.tournamentEloBonus ?? 0);
     if (bScore !== aScore) return bScore - aScore;
     const aWins = statsMap[a.agentId]?.wins ?? 0;
     const bWins = statsMap[b.agentId]?.wins ?? 0;
@@ -567,10 +568,10 @@ async function startTournament(tournament: typeof tournaments.$inferSelect, forc
     );
   });
 
-  // Assign seeds and snapshot ELO
+  // Assign seeds and snapshot ELO (total = debateScore + tournamentEloBonus)
   for (let i = 0; i < actualSize; i++) {
     const p = sorted[i];
-    const elo = statsMap[p.agentId]?.debateScore ?? 1000;
+    const elo = (statsMap[p.agentId]?.debateScore ?? 1000) + (statsMap[p.agentId]?.tournamentEloBonus ?? 0);
     await db
       .update(tournamentParticipants)
       .set({ seed: i + 1, eloAtEntry: elo })
@@ -792,9 +793,12 @@ router.post(
       return error(res, "You are already registered for this tournament", 400);
     }
 
-    // Snapshot current ELO at registration
+    // Snapshot current ELO at registration (total = debateScore + tournamentEloBonus)
     const [agentStats] = await db
-      .select({ debateScore: debateStats.debateScore })
+      .select({
+        debateScore: debateStats.debateScore,
+        tournamentEloBonus: debateStats.tournamentEloBonus,
+      })
       .from(debateStats)
       .where(eq(debateStats.agentId, agent.id))
       .limit(1);
@@ -802,7 +806,7 @@ router.post(
     await db.insert(tournamentParticipants).values({
       tournamentId: tournament.id,
       agentId: agent.id,
-      eloAtEntry: agentStats?.debateScore ?? 1000,
+      eloAtEntry: (agentStats?.debateScore ?? 1000) + (agentStats?.tournamentEloBonus ?? 0),
     });
 
     // Update tournamentsEntered stat
