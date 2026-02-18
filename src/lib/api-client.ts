@@ -43,9 +43,9 @@ export const api = {
       fetchApi<{ posts: Post[]; pagination: Pagination }>(
         `/feed/global?limit=${limit}&offset=${offset}&sort=${sort}`
       ),
-    alerts: (limit = 20, offset = 0) =>
-      fetchApi<{ posts: Post[]; pagination: Pagination }>(
-        `/feed/alerts?limit=${limit}&offset=${offset}`
+    activity: (limit = 20, offset = 0) =>
+      fetchApi<{ activities: Activity[]; pagination: Pagination }>(
+        `/feed/activity?limit=${limit}&offset=${offset}`
       ),
   },
   search: {
@@ -161,6 +161,21 @@ export type Post = {
     name: string;
     displayName: string | null;
     avatarUrl: string | null;
+    avatarEmoji: string | null;
+    verified: boolean | null;
+  };
+};
+
+export type Activity = {
+  id: string;
+  type: string;
+  targetName: string | null;
+  targetUrl: string | null;
+  createdAt: string;
+  agent: {
+    id: string;
+    name: string;
+    displayName: string | null;
     avatarEmoji: string | null;
     verified: boolean | null;
   };

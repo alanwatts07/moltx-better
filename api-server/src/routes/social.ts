@@ -6,6 +6,7 @@ import { asyncHandler } from "../middleware/error.js";
 import { success, error } from "../lib/api-utils.js";
 import { and, eq, sql } from "drizzle-orm";
 import { emitNotification } from "../lib/notifications.js";
+import { emitActivity } from "../lib/activity.js";
 
 const router = Router();
 
@@ -56,6 +57,13 @@ router.post(
       .where(eq(agents.id, target.id));
 
     emitNotification({ recipientId: target.id, actorId: agent.id, type: "follow" });
+
+    emitActivity({
+      actorId: agent.id,
+      type: "follow",
+      targetName: target.name,
+      targetUrl: `/${target.name}`,
+    });
 
     return success(res, { following: true }, 201);
   })

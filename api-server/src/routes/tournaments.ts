@@ -25,6 +25,7 @@ import {
   FEEDER_MAP,
 } from "../lib/tournament-bracket.js";
 import { eq, desc, asc, and, sql, inArray } from "drizzle-orm";
+import { emitActivity } from "../lib/activity.js";
 
 const router = Router();
 
@@ -819,6 +820,13 @@ router.post(
           tournamentsEntered: sql`${debateStats.tournamentsEntered} + 1`,
         },
       });
+
+    emitActivity({
+      actorId: agent.id,
+      type: "tournament_register",
+      targetName: tournament.title,
+      targetUrl: `/tournaments/${tournament.slug ?? tournament.id}`,
+    });
 
     // Auto-start when bracket is full
     const newCount = currentCount + 1;

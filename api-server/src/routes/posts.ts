@@ -11,6 +11,7 @@ import {
   emitMentionNotifications,
   getPostOwner,
 } from "../lib/notifications.js";
+import { emitActivity } from "../lib/activity.js";
 import { getViewerId } from "../lib/views.js";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 
@@ -159,6 +160,15 @@ router.post(
       content: data.content,
       actorId: agent.id,
       postId: newPost.id,
+    });
+
+    // Activity log
+    const snippet = data.content.length > 40 ? data.content.slice(0, 40) + "…" : data.content;
+    emitActivity({
+      actorId: agent.id,
+      type: data.type === "reply" ? "reply" : "post",
+      targetName: snippet,
+      targetUrl: `/posts/${newPost.id}`,
     });
 
     return success(res, newPost, 201);
@@ -450,6 +460,22 @@ router.post(
       actorId: agent.id,
       type: "like",
       postId: id,
+    });
+
+    // Activity log — fetch post snippet for target_name
+    const [likedPost] = await db
+      .select({ content: posts.content })
+      .from(posts)
+      .where(eq(posts.id, id))
+      .limit(1);
+    const likeSnippet = likedPost?.content
+      ? likedPost.content.length > 40 ? likedPost.content.slice(0, 40) + "…" : likedPost.content
+      : "a post";
+    emitActivity({
+      actorId: agent.id,
+      type: "like",
+      targetName: likeSnippet,
+      targetUrl: `/posts/${id}`,
     });
 
     return success(res, { liked: true }, 201);

@@ -27,6 +27,7 @@ import {
   getHigherSeedWinner,
   TOURNAMENT_TIMEOUT_HOURS,
 } from "../lib/tournament-bracket.js";
+import { emitActivity } from "../lib/activity.js";
 
 const router = Router();
 
@@ -325,6 +326,13 @@ async function declareWinner(
       type: "debate_result",
       content: `**${winnerLabel}** won a debate against **${loserLabel}**\n\nTopic: *${debate.topic}*\n\n[View the full debate](/debates/${slug})`,
       hashtags: ["#debate"],
+    });
+
+    emitActivity({
+      actorId: winnerId,
+      type: "debate_result",
+      targetName: `${winnerLabel} won vs ${loserLabel}`,
+      targetUrl: `/debates/${slug}`,
     });
   } catch (err) {
     console.error("[debate-result-post] FAILED:", err);
@@ -965,6 +973,14 @@ router.post(
         type: "debate_challenge",
       });
     }
+
+    const topicSnippet = topic.length > 40 ? topic.slice(0, 40) + "…" : topic;
+    emitActivity({
+      actorId: agent.id,
+      type: "debate_create",
+      targetName: topicSnippet,
+      targetUrl: `/debates/${debate.slug ?? debate.id}`,
+    });
 
     return success(res, debate, 201);
   })
@@ -2377,6 +2393,14 @@ router.post(
       type: "debate_accepted",
     });
 
+    const acceptTopicSnippet = debate.topic.length > 40 ? debate.topic.slice(0, 40) + "…" : debate.topic;
+    emitActivity({
+      actorId: agent.id,
+      type: "debate_join",
+      targetName: acceptTopicSnippet,
+      targetUrl: `/debates/${debate.slug ?? debate.id}`,
+    });
+
     return success(res, updated);
   })
 );
@@ -2472,6 +2496,14 @@ router.post(
       recipientId: debate.challengerId,
       actorId: agent.id,
       type: "debate_accepted",
+    });
+
+    const joinTopicSnippet = debate.topic.length > 40 ? debate.topic.slice(0, 40) + "…" : debate.topic;
+    emitActivity({
+      actorId: agent.id,
+      type: "debate_join",
+      targetName: joinTopicSnippet,
+      targetUrl: `/debates/${debate.slug ?? debate.id}`,
     });
 
     return success(res, updated);
@@ -2653,6 +2685,14 @@ router.post(
     ) {
       await completeDebate(debate);
     }
+
+    const debatePostTopicSnippet = debate.topic.length > 40 ? debate.topic.slice(0, 40) + "…" : debate.topic;
+    emitActivity({
+      actorId: agent.id,
+      type: "debate_post",
+      targetName: debatePostTopicSnippet,
+      targetUrl: `/debates/${debate.slug ?? debate.id}`,
+    });
 
     return success(res, newPost, 201);
   })
@@ -2857,6 +2897,14 @@ router.post(
       }
     }
 
+    const voteTopicSnippet = debate.topic.length > 40 ? debate.topic.slice(0, 40) + "…" : debate.topic;
+    emitActivity({
+      actorId: agent.id,
+      type: "debate_vote",
+      targetName: voteTopicSnippet,
+      targetUrl: `/debates/${debate.slug ?? debate.id}`,
+    });
+
     return success(
       res,
       {
@@ -2961,6 +3009,14 @@ router.post(
         );
       }
 
+      const forfeitSeriesSnippet = debate.topic.length > 40 ? debate.topic.slice(0, 40) + "…" : debate.topic;
+      emitActivity({
+        actorId: agent.id,
+        type: "debate_forfeit",
+        targetName: forfeitSeriesSnippet,
+        targetUrl: `/debates/${debate.slug ?? debate.id}`,
+      });
+
       const [updated] = await db
         .select()
         .from(debates)
@@ -3014,6 +3070,14 @@ router.post(
         })
         .where(eq(debateStats.agentId, agent.id));
     }
+
+    const forfeitSnippet = debate.topic.length > 40 ? debate.topic.slice(0, 40) + "…" : debate.topic;
+    emitActivity({
+      actorId: agent.id,
+      type: "debate_forfeit",
+      targetName: forfeitSnippet,
+      targetUrl: `/debates/${debate.slug ?? debate.id}`,
+    });
 
     return success(res, updated);
   })

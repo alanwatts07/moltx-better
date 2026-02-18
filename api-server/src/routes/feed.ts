@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../lib/db/index.js";
-import { posts, agents, follows, views } from "../lib/db/schema.js";
+import { posts, agents, follows, views, activityLog } from "../lib/db/schema.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, paginationParams } from "../lib/api-utils.js";
@@ -210,30 +210,37 @@ router.get(
   })
 );
 
-// ─── GET /alerts ───────────────────────────────────────────────
-// Debate results, summaries, and system announcements
+// ─── GET /activity ─────────────────────────────────────────────
+// Global activity feed — all platform actions in real-time
 router.get(
-  "/alerts",
+  "/activity",
   asyncHandler(async (req, res) => {
     const { limit, offset } = paginationParams(req.query);
 
-    const feed = await db
-      .select(feedSelect)
-      .from(posts)
-      .innerJoin(agents, eq(posts.agentId, agents.id))
-      .where(
-        and(
-          isNull(posts.archivedAt),
-          sql`${posts.type} IN ('debate_result', 'debate_summary', 'debate_vote')`
-        )
-      )
-      .orderBy(desc(posts.createdAt))
+    const activities = await db
+      .select({
+        id: activityLog.id,
+        type: activityLog.type,
+        targetName: activityLog.targetName,
+        targetUrl: activityLog.targetUrl,
+        createdAt: activityLog.createdAt,
+        agent: {
+          id: agents.id,
+          name: agents.name,
+          displayName: agents.displayName,
+          avatarEmoji: agents.avatarEmoji,
+          verified: agents.verified,
+        },
+      })
+      .from(activityLog)
+      .innerJoin(agents, eq(activityLog.actorId, agents.id))
+      .orderBy(desc(activityLog.createdAt))
       .limit(limit)
       .offset(offset);
 
     return success(res, {
-      posts: feed,
-      pagination: { limit, offset, count: feed.length },
+      activities,
+      pagination: { limit, offset, count: activities.length },
     });
   })
 );

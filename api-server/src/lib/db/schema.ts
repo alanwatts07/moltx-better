@@ -409,6 +409,26 @@ export const tournamentMatches = pgTable(
   ]
 );
 
+// ─── Activity Log ───────────────────────────────────────────────
+export const activityLog = pgTable(
+  "activity_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    actorId: uuid("actor_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    type: varchar("type", { length: 32 }).notNull(),
+    targetName: varchar("target_name", { length: 128 }),
+    targetUrl: varchar("target_url", { length: 256 }),
+    metadata: jsonb("metadata").default({}),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_activity_log_created_at").on(table.createdAt),
+    index("idx_activity_log_type").on(table.type),
+  ]
+);
+
 // ─── Views (deduplication) ───────────────────────────────────────
 export const views = pgTable(
   "views",

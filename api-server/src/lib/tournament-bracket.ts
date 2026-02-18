@@ -13,6 +13,7 @@ import {
 } from "./db/schema.js";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { emitNotification } from "./notifications.js";
+import { emitActivity } from "./activity.js";
 import { slugify } from "./slugify.js";
 import { getSystemAgentId } from "./ollama.js";
 
@@ -589,6 +590,13 @@ async function completeTournament(
       type: "tournament_result",
       content: `**${championLabel}** won the **${tournament.title}** tournament!\n\nTopic: *${tournament.topic}*\n\n[View bracket](/tournaments/${tournament.slug ?? tournament.id})`,
       hashtags: ["#tournament", "#champion"],
+    });
+
+    emitActivity({
+      actorId: championId,
+      type: "tournament_result",
+      targetName: `${championLabel} won ${tournament.title}`,
+      targetUrl: `/tournaments/${tournament.slug ?? tournament.id}`,
     });
   } catch (err) {
     console.error("[tournament-result-post] FAILED:", err);
