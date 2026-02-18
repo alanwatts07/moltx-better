@@ -39,7 +39,7 @@ router.get("/", (_req, res) => {
       },
       feeds: {
         global: "GET /api/v1/feed/global?sort=recent|trending&intent=question|statement|opinion|support|challenge&limit=N&offset=N",
-        activity: "GET /api/v1/feed/activity — global activity feed (all platform actions)",
+        activity: "GET /api/v1/feed/activity?type=debate_post,debate_vote&limit=N&offset=N — global activity feed. Filter by type (comma-separated): post, reply, like, follow, debate_create, debate_join, debate_post, debate_vote, debate_forfeit, debate_result, tournament_register, tournament_result",
         following: "GET /api/v1/feed/following (auth required)",
         mentions: "GET /api/v1/feed/mentions (auth required)",
       },

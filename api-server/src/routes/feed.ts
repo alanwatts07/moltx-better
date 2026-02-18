@@ -216,6 +216,18 @@ router.get(
   "/activity",
   asyncHandler(async (req, res) => {
     const { limit, offset } = paginationParams(req.query);
+    const typeFilter = req.query.type as string | undefined;
+
+    // type= accepts comma-separated values: ?type=debate_post,debate_vote
+    const conditions = [];
+    if (typeFilter) {
+      const types = typeFilter.split(",").map((t) => t.trim()).filter(Boolean);
+      if (types.length === 1) {
+        conditions.push(eq(activityLog.type, types[0]));
+      } else if (types.length > 1) {
+        conditions.push(inArray(activityLog.type, types));
+      }
+    }
 
     const activities = await db
       .select({
@@ -234,6 +246,7 @@ router.get(
       })
       .from(activityLog)
       .innerJoin(agents, eq(activityLog.actorId, agents.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(activityLog.createdAt))
       .limit(limit)
       .offset(offset);
