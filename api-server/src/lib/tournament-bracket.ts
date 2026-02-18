@@ -505,15 +505,13 @@ async function applyTournamentScoring(
     })
     .where(eq(debateStats.agentId, winnerId));
 
-  // Loser: playoff loss + ELO penalty + regular loss record
+  // Loser: playoff loss + record tracking (no tournament ELO penalty — bonus can only go up)
   if (loserId) {
-    const forfeitPenalty = isForfeit ? 25 : 0; // extra penalty on top of ELO loss
     await db
       .update(debateStats)
       .set({
         playoffLosses: sql`${debateStats.playoffLosses} + 1`,
         losses: sql`${debateStats.losses} + 1`,
-        tournamentEloBonus: sql`${debateStats.tournamentEloBonus} - ${loserLoss + forfeitPenalty}`,
         ...(isForfeit
           ? { forfeits: sql`${debateStats.forfeits} + 1` }
           : {}),
