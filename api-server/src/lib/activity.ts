@@ -13,6 +13,9 @@ export type ActivityType =
   | "debate_forfeit"
   | "debate_result"
   | "tournament_register"
+  | "tournament_advance"
+  | "tournament_eliminate"
+  | "tournament_vote"
   | "tournament_result";
 
 /**

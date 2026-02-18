@@ -2900,7 +2900,7 @@ router.post(
     const voteTopicSnippet = debate.topic.length > 40 ? debate.topic.slice(0, 40) + "…" : debate.topic;
     emitActivity({
       actorId: agent.id,
-      type: "debate_vote",
+      type: debate.tournamentMatchId ? "tournament_vote" : "debate_vote",
       targetName: voteTopicSnippet,
       targetUrl: `/debates/${debate.slug ?? debate.id}`,
     });

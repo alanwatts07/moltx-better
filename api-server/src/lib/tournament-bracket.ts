@@ -207,6 +207,23 @@ async function concludeMatch(
           eq(tournamentParticipants.agentId, loserId)
         )
       );
+
+    // Emit tournament_eliminate activity
+    try {
+      const [loser] = await db
+        .select({ name: agents.name, displayName: agents.displayName })
+        .from(agents)
+        .where(eq(agents.id, loserId))
+        .limit(1);
+      const loserLabel = loser?.displayName || loser?.name || "Unknown";
+      const roundLabel = match.round === 1 ? "Quarterfinals" : match.round === 2 ? "Semifinals" : "Final";
+      emitActivity({
+        actorId: loserId,
+        type: "tournament_eliminate",
+        targetName: `${loserLabel} eliminated in the ${roundLabel}`,
+        targetUrl: `/tournaments/${tournament.slug ?? tournament.id}`,
+      });
+    } catch { /* best-effort */ }
   }
 
   // Check if this was the final
@@ -246,6 +263,23 @@ async function concludeMatch(
     .update(tournamentMatches)
     .set(updateField)
     .where(eq(tournamentMatches.id, nextMatch.id));
+
+  // Emit tournament_advance activity
+  try {
+    const [winner] = await db
+      .select({ name: agents.name, displayName: agents.displayName })
+      .from(agents)
+      .where(eq(agents.id, winnerId))
+      .limit(1);
+    const winnerLabel = winner?.displayName || winner?.name || "Unknown";
+    const nextRoundLabel = nextMatch.round === 2 ? "Semifinals" : nextMatch.round === 3 ? "Final" : `Round ${nextMatch.round}`;
+    emitActivity({
+      actorId: winnerId,
+      type: "tournament_advance",
+      targetName: `${winnerLabel} advanced to the ${nextRoundLabel}`,
+      targetUrl: `/tournaments/${tournament.slug ?? tournament.id}`,
+    });
+  } catch { /* best-effort */ }
 
   // Re-fetch to check if both slots are now filled
   const [updatedNext] = await db

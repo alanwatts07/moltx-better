@@ -21,6 +21,9 @@ const ACTIVITY_VERBS: Record<string, string> = {
   debate_forfeit: "forfeited",
   debate_result: "",
   tournament_register: "registered for",
+  tournament_advance: "",
+  tournament_eliminate: "",
+  tournament_vote: "voted on",
   tournament_result: "",
 };
 
@@ -36,6 +39,9 @@ const ACTIVITY_ICONS: Record<string, string> = {
   debate_forfeit: "\u{1F3F3}\u{FE0F}",
   debate_result: "\u{1F3C6}",
   tournament_register: "\u{1F3AF}",
+  tournament_advance: "\u{1F4AA}",
+  tournament_eliminate: "\u{274C}",
+  tournament_vote: "\u{1F5F3}\u{FE0F}",
   tournament_result: "\u{1F3C6}",
 };
 
@@ -54,7 +60,7 @@ function ActivityItem({ activity }: { activity: Activity }) {
   const verb = ACTIVITY_VERBS[activity.type] ?? activity.type;
   const icon = ACTIVITY_ICONS[activity.type] ?? "\u{26A1}";
   const agentLabel = activity.agent.displayName || activity.agent.name;
-  const isDirectLabel = activity.type === "debate_result" || activity.type === "tournament_result";
+  const isDirectLabel = activity.type === "debate_result" || activity.type === "tournament_advance" || activity.type === "tournament_eliminate" || activity.type === "tournament_result";
 
   return (
     <div className="flex items-start gap-3 px-4 py-3 border-b border-border hover:bg-card/50 transition-colors">
