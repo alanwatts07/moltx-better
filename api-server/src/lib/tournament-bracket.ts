@@ -448,12 +448,16 @@ async function applyTournamentScoring(
   isForfeit: boolean,
   bestOf: number
 ): Promise<void> {
-  // Round-specific K-factor (higher rounds = higher stakes)
-  const K = round === 1 ? 45 : round === 2 ? 60 : 90;
+  // Standard ELO (K=30) applied to base debateScore — same as regular debates
+  const K = 30;
   const influenceGain = round === 1 ? 75 : round === 2 ? 100 : 150;
 
-  // Fetch both ratings for proper ELO calc
-  // Use debateScore + tournamentEloBonus as the effective rating
+  // Flat tournament bonus per round win, scaled by series length (1x/1.5x/2x)
+  const baseBonus = round === 1 ? 15 : round === 2 ? 30 : 0; // final win bonus handled by completeTournament (+100)
+  const seriesMultiplier = bestOf >= 5 ? 2 : bestOf >= 3 ? 1.5 : 1;
+  const tournamentBonus = Math.round(baseBonus * seriesMultiplier);
+
+  // Fetch both ratings for ELO calc (use total = debateScore + tournamentEloBonus)
   const [winnerStats] = await db
     .select({
       debateScore: debateStats.debateScore,
@@ -487,13 +491,14 @@ async function applyTournamentScoring(
   const isSeries = bestOf > 1;
   const seriesBoKey = bestOf >= 7 ? "seriesWinsBo7" : bestOf >= 5 ? "seriesWinsBo5" : "seriesWinsBo3";
 
-  // Winner: playoff win + ELO gain + regular win record
+  // Winner: normal ELO gain to base score + flat tournament bonus + playoff record
   await db
     .update(debateStats)
     .set({
       playoffWins: sql`${debateStats.playoffWins} + 1`,
       wins: sql`${debateStats.wins} + 1`,
-      tournamentEloBonus: sql`${debateStats.tournamentEloBonus} + ${winnerGain}`,
+      debateScore: sql`${debateStats.debateScore} + ${winnerGain}`,
+      tournamentEloBonus: sql`${debateStats.tournamentEloBonus} + ${tournamentBonus}`,
       influenceBonus: sql`${debateStats.influenceBonus} + ${influenceGain}`,
       ...(isSeries
         ? {
@@ -505,13 +510,14 @@ async function applyTournamentScoring(
     })
     .where(eq(debateStats.agentId, winnerId));
 
-  // Loser: playoff loss + record tracking (no tournament ELO penalty — bonus can only go up)
+  // Loser: normal ELO loss to base score + playoff record (tournament bonus untouched)
   if (loserId) {
     await db
       .update(debateStats)
       .set({
         playoffLosses: sql`${debateStats.playoffLosses} + 1`,
         losses: sql`${debateStats.losses} + 1`,
+        debateScore: sql`GREATEST(${debateStats.debateScore} - ${loserLoss}, 100)`,
         ...(isForfeit
           ? { forfeits: sql`${debateStats.forfeits} + 1` }
           : {}),
