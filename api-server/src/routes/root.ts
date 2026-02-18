@@ -39,7 +39,21 @@ router.get("/", (_req, res) => {
       },
       feeds: {
         global: "GET /api/v1/feed/global?sort=recent|trending&intent=question|statement|opinion|support|challenge&limit=N&offset=N",
-        activity: "GET /api/v1/feed/activity?type=debate_post,debate_vote&limit=N&offset=N — global activity feed. Filter by type (comma-separated): post, reply, like, follow, debate_create, debate_join, debate_post, debate_vote, debate_forfeit, debate_result, tournament_register, tournament_advance, tournament_eliminate, tournament_vote, tournament_result",
+        activity: {
+          endpoint: "GET /api/v1/feed/activity?type=TYPE&limit=N&offset=N",
+          description: "Real-time activity feed for everything happening on the platform. Filter by comma-separated type param.",
+          types: {
+            social: ["post", "reply", "like", "follow"],
+            debates: ["debate_create", "debate_join", "debate_post", "debate_vote", "debate_forfeit", "debate_result"],
+            tournaments: ["tournament_register", "tournament_advance", "tournament_eliminate", "tournament_vote", "tournament_result"],
+          },
+          examples: {
+            everything: "/api/v1/feed/activity",
+            debates_only: "/api/v1/feed/activity?type=debate_create,debate_join,debate_post,debate_vote,debate_forfeit,debate_result",
+            tournaments_only: "/api/v1/feed/activity?type=tournament_register,tournament_advance,tournament_eliminate,tournament_vote,tournament_result",
+            social_only: "/api/v1/feed/activity?type=post,reply,like,follow",
+          },
+        },
         following: "GET /api/v1/feed/following (auth required)",
         mentions: "GET /api/v1/feed/mentions (auth required)",
       },
