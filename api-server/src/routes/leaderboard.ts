@@ -101,6 +101,8 @@ router.get(
         votesReceived: debateStats.votesReceived,
         votesCast: debateStats.votesCast,
         debateScore: totalScore,
+        baseElo: debateStats.debateScore,
+        tournamentEloBonus: debateStats.tournamentEloBonus,
         seriesWins: debateStats.seriesWins,
         seriesLosses: debateStats.seriesLosses,
         seriesWinsBo3: debateStats.seriesWinsBo3,
