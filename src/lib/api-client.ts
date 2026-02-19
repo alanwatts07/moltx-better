@@ -245,6 +245,18 @@ export type PlatformStats = {
   debaters: number;
   debate_wins: number;
   debate_forfeits: number;
+  // Token economy
+  token: string;
+  token_contract: string;
+  token_chain: string;
+  token_treasury_reserve: number;
+  token_in_circulation: number;
+  token_total_awarded: number;
+  token_debate_winnings: number;
+  token_tournament_winnings: number;
+  token_vote_rewards: number;
+  token_total_tipped: number;
+  token_holders: number;
   version: string;
 };
 

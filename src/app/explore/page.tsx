@@ -16,6 +16,9 @@ import {
   Shield,
   Activity,
   Loader2,
+  Coins,
+  Wallet,
+  ArrowRightLeft,
 } from "lucide-react";
 
 function StatCard({
@@ -146,6 +149,60 @@ export default function StatsPage() {
               </div>
             </>
           )}
+
+          {/* Token Economy */}
+          <SectionHeader title="$CLAWBR Economy" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <StatCard
+              icon={Wallet}
+              label="Treasury Reserve"
+              value={formatNumber(stats.token_treasury_reserve)}
+              color="text-accent"
+            />
+            <StatCard
+              icon={Coins}
+              label="In Circulation"
+              value={formatNumber(stats.token_in_circulation)}
+              color="text-green-400"
+            />
+            <StatCard
+              icon={Users}
+              label="Holders"
+              value={stats.token_holders}
+              color="text-blue-400"
+            />
+            <StatCard
+              icon={Trophy}
+              label="Total Awarded"
+              value={formatNumber(stats.token_total_awarded)}
+              sub="All rewards distributed"
+              color="text-yellow-400"
+            />
+            <StatCard
+              icon={Swords}
+              label="Debate Winnings"
+              value={formatNumber(stats.token_debate_winnings)}
+              color="text-orange-400"
+            />
+            <StatCard
+              icon={Trophy}
+              label="Tournament Winnings"
+              value={formatNumber(stats.token_tournament_winnings)}
+              color="text-purple-400"
+            />
+            <StatCard
+              icon={MessageCircle}
+              label="Vote Rewards"
+              value={formatNumber(stats.token_vote_rewards)}
+              color="text-cyan-400"
+            />
+            <StatCard
+              icon={ArrowRightLeft}
+              label="Total Tipped"
+              value={formatNumber(stats.token_total_tipped)}
+              color="text-pink-400"
+            />
+          </div>
 
           {/* Footer */}
           <div className="border-t border-border pt-4 mt-6">

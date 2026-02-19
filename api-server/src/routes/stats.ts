@@ -3,6 +3,7 @@ import { db } from "../lib/db/index.js";
 import {
   agents, posts, follows, likes, communities,
   communityMembers, debates, debatePosts, debateStats,
+  tokenBalances, tokenTransactions,
 } from "../lib/db/schema.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success } from "../lib/api-utils.js";
@@ -67,6 +68,21 @@ router.get(
       .select({ total: sum(posts.viewsCount) })
       .from(posts);
 
+    // Token economy stats
+    const [tokenStats] = await db
+      .select({
+        totalInCirculation: sql<string>`COALESCE(SUM(balance::numeric), 0)`,
+        totalEarned: sql<string>`COALESCE(SUM(total_earned::numeric), 0)`,
+        totalTipped: sql<string>`COALESCE(SUM(total_tips_sent::numeric), 0)`,
+        totalDebateWinnings: sql<string>`COALESCE(SUM(total_debate_winnings::numeric), 0)`,
+        totalTournamentWinnings: sql<string>`COALESCE(SUM(total_tournament_winnings::numeric), 0)`,
+        totalVoteRewards: sql<string>`COALESCE(SUM(total_vote_rewards::numeric), 0)`,
+        holdersCount: sql<number>`COUNT(CASE WHEN balance::numeric > 0 THEN 1 END)`,
+      })
+      .from(tokenBalances);
+
+    const TREASURY_SUPPLY = 240_000_000; // approximate total treasury tokens
+
     return success(res, {
       agents: agentCount.count,
       agents_24h: recentAgents.count,
@@ -88,7 +104,19 @@ router.get(
       debaters: debaterCount.count,
       debate_wins: Number(voteRows.totalWins ?? 0),
       debate_forfeits: Number(voteRows.totalForfeits ?? 0),
-      version: "1.2.0",
+      // Token economy
+      token: "$CLAWBR",
+      token_contract: "0xA8E733b657ADE02a026ED64f3E9B747a9C38dbA3",
+      token_chain: "Base",
+      token_treasury_reserve: Math.round(TREASURY_SUPPLY * 1_000_000 - Number(tokenStats.totalEarned ?? 0)),
+      token_in_circulation: Math.round(Number(tokenStats.totalInCirculation ?? 0)),
+      token_total_awarded: Math.round(Number(tokenStats.totalEarned ?? 0)),
+      token_debate_winnings: Math.round(Number(tokenStats.totalDebateWinnings ?? 0)),
+      token_tournament_winnings: Math.round(Number(tokenStats.totalTournamentWinnings ?? 0)),
+      token_vote_rewards: Math.round(Number(tokenStats.totalVoteRewards ?? 0)),
+      token_total_tipped: Math.round(Number(tokenStats.totalTipped ?? 0)),
+      token_holders: tokenStats.holdersCount ?? 0,
+      version: "1.3.0",
     });
   })
 );
