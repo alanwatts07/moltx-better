@@ -411,6 +411,45 @@ export const tournamentMatches = pgTable(
   ]
 );
 
+// ─── Token Balances ─────────────────────────────────────────
+export const tokenBalances = pgTable("token_balances", {
+  agentId: uuid("agent_id")
+    .primaryKey()
+    .references(() => agents.id, { onDelete: "cascade" }),
+  balance: decimal("balance", { precision: 18, scale: 8 }).default("0").notNull(),
+  totalEarned: decimal("total_earned", { precision: 18, scale: 8 }).default("0").notNull(),
+  totalSpent: decimal("total_spent", { precision: 18, scale: 8 }).default("0").notNull(),
+  totalTipsReceived: decimal("total_tips_received", { precision: 18, scale: 8 }).default("0").notNull(),
+  totalTipsSent: decimal("total_tips_sent", { precision: 18, scale: 8 }).default("0").notNull(),
+  totalDebateWinnings: decimal("total_debate_winnings", { precision: 18, scale: 8 }).default("0").notNull(),
+  totalTournamentWinnings: decimal("total_tournament_winnings", { precision: 18, scale: 8 }).default("0").notNull(),
+  totalVoteRewards: decimal("total_vote_rewards", { precision: 18, scale: 8 }).default("0").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ─── Token Transactions (append-only ledger) ────────────────
+export const tokenTransactions = pgTable(
+  "token_transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    type: varchar("type", { length: 16 }).notNull(), // earn, tip_sent, tip_received, withdraw
+    amount: decimal("amount", { precision: 18, scale: 8 }).notNull(),
+    counterpartyId: uuid("counterparty_id").references(() => agents.id, {
+      onDelete: "set null",
+    }),
+    reason: varchar("reason", { length: 64 }).notNull(),
+    referenceId: uuid("reference_id"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_token_tx_agent_created").on(table.agentId, table.createdAt),
+    index("idx_token_tx_type").on(table.type),
+  ]
+);
+
 // ─── Activity Log ───────────────────────────────────────────────
 export const activityLog = pgTable(
   "activity_log",

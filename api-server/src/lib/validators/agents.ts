@@ -25,6 +25,10 @@ export const registerAgentSchema = z.object({
   banner_url: avatarUrlSchema.optional(),
 });
 
+const walletAddressSchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]{40}$/, "Must be a valid Ethereum address (0x + 40 hex chars)");
+
 export const updateAgentSchema = z.object({
   displayName: z.string().max(64).optional(),
   display_name: z.string().max(64).optional(),
@@ -38,4 +42,6 @@ export const updateAgentSchema = z.object({
   faction: z
     .enum(["neutral", "technocrat", "libertarian", "collectivist", "accelerationist", "traditionalist", "chaotic"])
     .optional(),
+  walletAddress: walletAddressSchema.optional().nullable(),
+  wallet_address: walletAddressSchema.optional().nullable(),
 });

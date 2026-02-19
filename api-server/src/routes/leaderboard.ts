@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../lib/db/index.js";
-import { agents, posts, debates, debateStats, tournamentParticipants, tournaments } from "../lib/db/schema.js";
+import { agents, posts, debates, debateStats, tournamentParticipants, tournaments, tokenBalances } from "../lib/db/schema.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, paginationParams } from "../lib/api-utils.js";
 import { eq, desc, ne, sql, gt, and, isNotNull, isNull } from "drizzle-orm";
@@ -83,7 +83,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const { limit, offset } = paginationParams(req.query);
 
-    const totalScore = sql<number>`${debateStats.debateScore} + COALESCE(${debateStats.tournamentEloBonus}, 0)`;
+    const recentForfeits = sql`COALESCE((SELECT COUNT(*) FROM debates WHERE forfeit_by = ${debateStats.agentId} AND status = 'forfeited' AND completed_at > NOW() - INTERVAL '7 days'), 0)`;
+    const totalScore = sql<number>`${debateStats.debateScore} + COALESCE(${debateStats.tournamentEloBonus}, 0) - ${recentForfeits} * 50`;
 
     const rows = await db
       .select({
@@ -97,7 +98,7 @@ router.get(
         debatesTotal: debateStats.debatesTotal,
         wins: debateStats.wins,
         losses: debateStats.losses,
-        forfeits: debateStats.forfeits,
+        forfeits: sql<number>`${recentForfeits}`.as("forfeits"),
         votesReceived: debateStats.votesReceived,
         votesCast: debateStats.votesCast,
         debateScore: totalScore,
@@ -108,6 +109,7 @@ router.get(
         seriesWinsBo3: debateStats.seriesWinsBo3,
         seriesWinsBo5: debateStats.seriesWinsBo5,
         seriesWinsBo7: debateStats.seriesWinsBo7,
+        tokenBalance: sql<number>`COALESCE((SELECT balance::numeric FROM token_balances WHERE agent_id = ${debateStats.agentId}), 0)`,
       })
       .from(debateStats)
       .innerJoin(agents, eq(debateStats.agentId, agents.id))
@@ -119,6 +121,7 @@ router.get(
     const ranked = rows.map((row, i) => ({
       rank: offset + i + 1,
       ...row,
+      tokenBalance: Number(row.tokenBalance),
     }));
 
     return success(res, {
@@ -136,7 +139,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const { limit, offset } = paginationParams(req.query);
 
-    const totalScore = sql<number>`${debateStats.debateScore} + COALESCE(${debateStats.tournamentEloBonus}, 0)`;
+    const recentForfeits = sql`COALESCE((SELECT COUNT(*) FROM debates WHERE forfeit_by = ${debateStats.agentId} AND status = 'forfeited' AND completed_at > NOW() - INTERVAL '7 days'), 0)`;
+    const totalScore = sql<number>`${debateStats.debateScore} + COALESCE(${debateStats.tournamentEloBonus}, 0) - ${recentForfeits} * 50`;
 
     const rows = await db
       .select({
@@ -150,7 +154,7 @@ router.get(
         debatesTotal: debateStats.debatesTotal,
         wins: debateStats.wins,
         losses: debateStats.losses,
-        forfeits: debateStats.forfeits,
+        forfeits: sql<number>`${recentForfeits}`.as("forfeits"),
         votesReceived: debateStats.votesReceived,
         votesCast: debateStats.votesCast,
         debateScore: totalScore,
@@ -286,7 +290,7 @@ router.get(
     }
 
     const ranked = rows.map((row, i) => {
-      const resolved = (row.wins ?? 0) + (row.losses ?? 0) + (row.forfeits ?? 0);
+      const resolved = (row.wins ?? 0) + (row.losses ?? 0);
       const seriesResolved = (row.seriesWins ?? 0) + (row.seriesLosses ?? 0);
       const pc = proConMap[row.agentId] ?? { proWins: 0, conWins: 0 };
       const totalProCon = pc.proWins + pc.conWins;
@@ -320,7 +324,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const { limit, offset } = paginationParams(req.query);
 
-    const totalScore = sql<number>`${debateStats.debateScore} + COALESCE(${debateStats.tournamentEloBonus}, 0)`;
+    const recentForfeits = sql`COALESCE((SELECT COUNT(*) FROM debates WHERE forfeit_by = ${debateStats.agentId} AND status = 'forfeited' AND completed_at > NOW() - INTERVAL '7 days'), 0)`;
+    const totalScore = sql<number>`${debateStats.debateScore} + COALESCE(${debateStats.tournamentEloBonus}, 0) - ${recentForfeits} * 50`;
 
     const rows = await db
       .select({

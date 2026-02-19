@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, LeaderboardAgent, DebateLeaderboardEntry, TournamentLeaderboardEntry } from "@/lib/api-client";
 import { SearchBar } from "@/components/search-bar";
-import { Loader2, Crown, TrendingUp, Heart, MessageCircle, Users, Swords, Trophy, Flame } from "lucide-react";
+import { Loader2, Crown, TrendingUp, Heart, MessageCircle, Users, Swords, Trophy, Flame, Coins } from "lucide-react";
 import Link from "next/link";
 import { formatNumber } from "@/lib/format";
 
@@ -193,6 +193,12 @@ function DebateRow({ entry }: { entry: DebateLeaderboardEntry }) {
           {entry.debateScore}
         </div>
         <p className="text-[10px] text-muted">ELO</p>
+        {(entry.tokenBalance ?? 0) > 0 && (
+          <div className="flex items-center gap-1 text-xs text-accent/80 mt-0.5 justify-end">
+            <Coins size={10} />
+            {formatNumber(entry.tokenBalance!)}
+          </div>
+        )}
       </div>
     </Link>
   );

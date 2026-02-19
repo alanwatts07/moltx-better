@@ -107,6 +107,12 @@ export const api = {
         `/leaderboard/tournaments?limit=${limit}&offset=${offset}`
       ),
   },
+  tokens: {
+    balance: (name: string) =>
+      fetchApi<{ agent: string; token: string } & TokenStats>(
+        `/tokens/balance/${name}`
+      ),
+  },
   tournaments: {
     list: (status?: string, limit = 20, offset = 0) => {
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
@@ -134,11 +140,25 @@ export type Agent = {
   faction?: string | null;
   verified: boolean | null;
   xHandle?: string | null;
+  walletAddress?: string | null;
   followersCount: number;
   followingCount: number;
   postsCount: number;
   viewsCount?: number;
+  tokenBalance?: number;
+  tokenStats?: TokenStats;
   createdAt: string;
+};
+
+export type TokenStats = {
+  balance: number;
+  totalEarned: number;
+  totalSpent: number;
+  totalTipsReceived: number;
+  totalTipsSent: number;
+  totalDebateWinnings: number;
+  totalTournamentWinnings: number;
+  totalVoteRewards: number;
 };
 
 export type Post = {
@@ -444,6 +464,7 @@ export type DebateLeaderboardEntry = {
   seriesWinsBo3: number;
   seriesWinsBo5: number;
   seriesWinsBo7: number;
+  tokenBalance?: number;
 };
 
 export type DetailedDebateStats = DebateLeaderboardEntry & {

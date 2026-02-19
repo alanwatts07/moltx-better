@@ -28,6 +28,7 @@ import {
   TOURNAMENT_TIMEOUT_HOURS,
 } from "../lib/tournament-bracket.js";
 import { emitActivity } from "../lib/activity.js";
+import { creditTokens, TOKEN_REWARDS } from "../lib/tokens.js";
 
 const router = Router();
 
@@ -290,6 +291,14 @@ async function declareWinner(
         })
         .where(eq(debateStats.agentId, loserId));
     }
+
+    // $CLAWBR reward for Bo1 debate win
+    creditTokens({
+      agentId: winnerId,
+      amount: TOKEN_REWARDS.DEBATE_WIN_BO1,
+      reason: "debate_win",
+      referenceId: debate.id,
+    }).catch((err) => console.error("[token-reward] Bo1 win:", err));
   }
 
   // Notify winner
@@ -525,6 +534,17 @@ async function concludeRegularSeries(
       seriesLosses: sql`${debateStats.seriesLosses} + 1`,
     })
     .where(eq(debateStats.agentId, loserId));
+
+  // $CLAWBR reward for series win (amount scales by bestOf)
+  const seriesReward = bestOf >= 7 ? TOKEN_REWARDS.SERIES_WIN_BO7
+    : bestOf >= 5 ? TOKEN_REWARDS.SERIES_WIN_BO5
+    : TOKEN_REWARDS.SERIES_WIN_BO3;
+  creditTokens({
+    agentId: winnerId,
+    amount: seriesReward,
+    reason: "series_win",
+    referenceId: seriesId,
+  }).catch((err) => console.error("[token-reward] Series win:", err));
 
   // Notify winner
   await emitNotification({
@@ -1557,7 +1577,6 @@ router.get(
             .set({
               forfeits: sql`${debateStats.forfeits} + 1`,
               debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-              debateScore: sql`GREATEST(${debateStats.debateScore} - 50, 0)`,
             })
             .where(eq(debateStats.agentId, forfeitedId));
 
@@ -1594,7 +1613,6 @@ router.get(
             .set({
               forfeits: sql`${debateStats.forfeits} + 1`,
               debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-              debateScore: sql`GREATEST(${debateStats.debateScore} - 50, 0)`,
             })
             .where(eq(debateStats.agentId, forfeitedId));
         }
@@ -2844,6 +2862,14 @@ router.post(
           target: debateStats.agentId,
           set: { votesCast: sql`${debateStats.votesCast} + 1` },
         });
+
+      // $CLAWBR reward for qualifying vote
+      creditTokens({
+        agentId: agent.id,
+        amount: TOKEN_REWARDS.QUALIFYING_VOTE,
+        reason: "qualifying_vote",
+        referenceId: debate.id,
+      }).catch((err) => console.error("[token-reward] Vote:", err));
     }
 
     // Auto-close voting if jury is full (skip for retrospective — winner already decided)
@@ -2981,13 +3007,12 @@ router.post(
         })
         .where(eq(debates.id, debate.id));
 
-      // Forfeit penalty for the forfeiter
+      // Forfeit penalty for the forfeiter (ELO penalty applied dynamically at display time)
       await db
         .update(debateStats)
         .set({
           forfeits: sql`${debateStats.forfeits} + 1`,
           debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-          debateScore: sql`GREATEST(${debateStats.debateScore} - 50, 0)`,
         })
         .where(eq(debateStats.agentId, agent.id));
 
@@ -3061,13 +3086,12 @@ router.post(
         });
       }
 
-      // Update stats: forfeiter gets +1 forfeit, -50 debateScore
+      // Update stats: forfeiter gets +1 forfeit (ELO penalty applied dynamically at display time)
       await db
         .update(debateStats)
         .set({
           forfeits: sql`${debateStats.forfeits} + 1`,
           debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-          debateScore: sql`GREATEST(${debateStats.debateScore} - 50, 0)`,
         })
         .where(eq(debateStats.agentId, agent.id));
     }

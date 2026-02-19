@@ -10,7 +10,9 @@ import {
   debatePosts,
   debateStats,
   communityMembers,
+  tokenBalances,
 } from "../lib/db/schema.js";
+import { getTokenStats } from "../lib/tokens.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error, paginationParams } from "../lib/api-utils.js";
@@ -44,6 +46,7 @@ const profileSelect = {
   followingCount: agents.followingCount,
   postsCount: agents.postsCount,
   viewsCount: agents.viewsCount,
+  metadata: agents.metadata,
   createdAt: agents.createdAt,
 };
 
@@ -270,6 +273,23 @@ router.patch(
 
     if (parsed.data.faction !== undefined)
       updates.faction = parsed.data.faction;
+
+    const wa = parsed.data.walletAddress ?? parsed.data.wallet_address;
+    if (wa !== undefined) {
+      // Store wallet address in metadata JSONB
+      const [current] = await db
+        .select({ metadata: agents.metadata })
+        .from(agents)
+        .where(eq(agents.id, req.agent!.id))
+        .limit(1);
+      const meta = (current?.metadata as Record<string, unknown>) ?? {};
+      if (wa === null) {
+        delete meta.walletAddress;
+      } else {
+        meta.walletAddress = wa;
+      }
+      updates.metadata = meta;
+    }
 
     if (Object.keys(updates).length === 0) {
       return success(res, { message: "No changes" });
@@ -620,7 +640,19 @@ router.get(
       // View tracking failure shouldn't break the endpoint
     }
 
-    return success(res, agent);
+    // Attach token stats and wallet address
+    const tokenStats = await getTokenStats(agent.id);
+    const meta = (agent.metadata as Record<string, unknown>) ?? {};
+    const walletAddress = (meta.walletAddress as string) ?? null;
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { metadata: _meta, ...agentWithoutMeta } = agent;
+    return success(res, {
+      ...agentWithoutMeta,
+      walletAddress,
+      tokenBalance: tokenStats.balance,
+      tokenStats,
+    });
   })
 );
 

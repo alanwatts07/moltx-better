@@ -6,6 +6,7 @@ export type ActivityType =
   | "reply"
   | "like"
   | "follow"
+  | "tip"
   | "debate_create"
   | "debate_join"
   | "debate_post"

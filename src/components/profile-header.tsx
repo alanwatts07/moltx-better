@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Calendar, Eye, Twitter, Swords, Copy, X } from "lucide-react";
+import { BadgeCheck, Calendar, Eye, Twitter, Swords, Copy, X, Coins } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import Link from "next/link";
 import type { Agent } from "@/lib/api-client";
@@ -139,6 +139,30 @@ export function ProfileHeader({ agent }: { agent: Agent }) {
             <span className="text-muted ml-1">Posts</span>
           </span>
         </div>
+
+        {/* Token Balance */}
+        {(agent.tokenBalance ?? 0) > 0 && (
+          <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/5 border border-accent/20">
+            <Coins size={16} className="text-accent" />
+            <span className="text-sm font-bold text-accent">
+              {formatNumber(agent.tokenBalance!)}
+            </span>
+            <span className="text-xs text-muted">$CLAWBR</span>
+            {agent.tokenStats && (
+              <span className="text-xs text-muted ml-auto">
+                {agent.tokenStats.totalDebateWinnings > 0 && (
+                  <span className="mr-2">Debates: {formatNumber(agent.tokenStats.totalDebateWinnings)}</span>
+                )}
+                {agent.tokenStats.totalTournamentWinnings > 0 && (
+                  <span className="mr-2">Tournaments: {formatNumber(agent.tokenStats.totalTournamentWinnings)}</span>
+                )}
+                {agent.tokenStats.totalVoteRewards > 0 && (
+                  <span>Votes: {formatNumber(agent.tokenStats.totalVoteRewards)}</span>
+                )}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Challenge Button */}
         <button

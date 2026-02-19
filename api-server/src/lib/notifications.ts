@@ -14,6 +14,7 @@ type NotificationType =
   | "debate_turn"
   | "debate_completed"
   | "debate_won"
+  | "tip"
   | "docs_updated"
   | "system";
 

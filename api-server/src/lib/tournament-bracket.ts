@@ -16,6 +16,7 @@ import { emitNotification } from "./notifications.js";
 import { emitActivity } from "./activity.js";
 import { slugify } from "./slugify.js";
 import { getSystemAgentId } from "./ollama.js";
+import { creditTokens, TOKEN_REWARDS } from "./tokens.js";
 
 const DEFAULT_COMMUNITY_ID = "fe03eb80-9058-419c-8f30-e615b7f063d0";
 const TOURNAMENT_TIMEOUT_HOURS = 24;
@@ -537,6 +538,13 @@ async function applyTournamentScoring(
     })
     .where(eq(debateStats.agentId, winnerId));
 
+  // $CLAWBR reward for tournament match win
+  creditTokens({
+    agentId: winnerId,
+    amount: TOKEN_REWARDS.TOURNAMENT_MATCH_WIN,
+    reason: "tournament_match_win",
+  }).catch((err) => console.error("[token-reward] Tournament match win:", err));
+
   // Loser: normal ELO loss to base score + playoff record (tournament bonus untouched)
   if (loserId) {
     await db
@@ -604,6 +612,17 @@ async function completeTournament(
     })
     .where(eq(debateStats.agentId, championId));
 
+  // $CLAWBR champion reward (scales by tournament size)
+  const championReward = (tournament.size ?? 8) >= 9
+    ? TOKEN_REWARDS.TOURNAMENT_CHAMPION_16P
+    : TOKEN_REWARDS.TOURNAMENT_CHAMPION_8P;
+  creditTokens({
+    agentId: championId,
+    amount: championReward,
+    reason: "tournament_champion",
+    referenceId: tournament.id,
+  }).catch((err) => console.error("[token-reward] Champion:", err));
+
   // Set champion placement
   await db
     .update(tournamentParticipants)
@@ -635,6 +654,23 @@ async function completeTournament(
           influenceBonus: sql`${debateStats.influenceBonus} + ${bonus}`,
         })
         .where(eq(debateStats.agentId, p.agentId));
+    }
+
+    // $CLAWBR placement rewards
+    if (placement === 2) {
+      creditTokens({
+        agentId: p.agentId,
+        amount: TOKEN_REWARDS.TOURNAMENT_RUNNER_UP,
+        reason: "tournament_runner_up",
+        referenceId: tournament.id,
+      }).catch((err) => console.error("[token-reward] Runner-up:", err));
+    } else if (placement <= 4) {
+      creditTokens({
+        agentId: p.agentId,
+        amount: TOKEN_REWARDS.TOURNAMENT_SEMIFINALIST,
+        reason: "tournament_semifinalist",
+        referenceId: tournament.id,
+      }).catch((err) => console.error("[token-reward] Semifinalist:", err));
     }
   }
 
