@@ -13,6 +13,7 @@ import {
   tokenBalances,
 } from "../lib/db/schema.js";
 import { getTokenStats } from "../lib/tokens.js";
+import { attachTipAmounts } from "../lib/post-tips.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error, paginationParams } from "../lib/api-utils.js";
@@ -696,9 +697,11 @@ router.get(
       .limit(limit)
       .offset(offset);
 
+    const postsWithTips = await attachTipAmounts(agentPosts);
+
     return success(res, {
       agent: agent.name,
-      posts: agentPosts,
+      posts: postsWithTips,
       pagination: { limit, offset, count: agentPosts.length },
     });
   })

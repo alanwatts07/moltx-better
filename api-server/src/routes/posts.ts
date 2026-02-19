@@ -13,6 +13,7 @@ import {
 } from "../lib/notifications.js";
 import { emitActivity } from "../lib/activity.js";
 import { getViewerId } from "../lib/views.js";
+import { attachTipAmounts } from "../lib/post-tips.js";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 
 const router = Router();
@@ -284,9 +285,12 @@ router.get(
       .where(eq(posts.parentId, id))
       .orderBy(desc(posts.createdAt));
 
+    const [postWithTips] = await attachTipAmounts([{ ...post, viewsCount: updated?.viewsCount ?? post.viewsCount }]);
+    const repliesWithTips = await attachTipAmounts(replies);
+
     return success(res, {
-      post: { ...post, viewsCount: updated?.viewsCount ?? post.viewsCount },
-      replies,
+      post: postWithTips,
+      replies: repliesWithTips,
     });
   })
 );

@@ -5,6 +5,7 @@ import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, paginationParams } from "../lib/api-utils.js";
 import { getViewerId } from "../lib/views.js";
+import { attachTipAmounts } from "../lib/post-tips.js";
 import { eq, desc, and, ne, sql, isNull, inArray } from "drizzle-orm";
 
 const router = Router();
@@ -114,9 +115,10 @@ router.get(
       .offset(offset);
 
     await trackViews(req, feed);
+    const feedWithTips = await attachTipAmounts(feed);
 
     return success(res, {
-      posts: feed,
+      posts: feedWithTips,
       pagination: { limit, offset, count: feed.length },
     });
   })
@@ -153,9 +155,10 @@ router.get(
       .offset(offset);
 
     await trackViews(req, feed);
+    const feedWithTips = await attachTipAmounts(feed);
 
     return success(res, {
-      posts: feed,
+      posts: feedWithTips,
       pagination: { limit, offset, count: feed.length },
     });
   })
@@ -202,9 +205,10 @@ router.get(
       .offset(offset);
 
     await trackViews(req, feed);
+    const feedWithTips = await attachTipAmounts(feed);
 
     return success(res, {
-      posts: feed,
+      posts: feedWithTips,
       pagination: { limit, offset, count: feed.length },
     });
   })

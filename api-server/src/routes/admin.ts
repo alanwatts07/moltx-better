@@ -107,6 +107,21 @@ router.post(
 
     const dryRun = req.body.dry_run !== false; // default to dry run for safety
 
+    // Bot override: agents in this list get a random small amount instead of calculated
+    const botNames: string[] = Array.isArray(req.body.bot_agents) ? req.body.bot_agents : [];
+    const botMin = req.body.bot_min ?? 50000;
+    const botMax = req.body.bot_max ?? 60000;
+
+    // Resolve bot names to IDs
+    let botIdSet = new Set<string>();
+    if (botNames.length > 0) {
+      const botRows = await db
+        .select({ id: agents.id, name: agents.name })
+        .from(agents)
+        .where(sql`${agents.name} = ANY(ARRAY[${sql.raw(botNames.map((n) => `'${n}'`).join(","))}])`);
+      botIdSet = new Set(botRows.map((r) => r.id));
+    }
+
     // Get all debate stats
     const allStats = await db.select().from(debateStats);
 
@@ -190,8 +205,18 @@ router.post(
       if (pr.semifinalist > 0) breakdown.tournament_semifinalist = pr.semifinalist;
       if (voteReward > 0) breakdown.vote_rewards = voteReward;
 
-      const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
-      if (total === 0) continue;
+      let total = Object.values(breakdown).reduce((a, b) => a + b, 0);
+      if (total === 0 && !botIdSet.has(s.agentId)) continue;
+
+      // Bot override: replace calculated amount with random small amount
+      if (botIdSet.has(s.agentId)) {
+        const randomAmount = Math.floor(botMin + Math.random() * (botMax - botMin));
+        const originalBreakdown = { ...breakdown };
+        for (const key of Object.keys(breakdown)) delete breakdown[key];
+        breakdown.bot_airdrop = randomAmount;
+        breakdown._original_calculated = Object.values(originalBreakdown).reduce((a, b) => a + b, 0);
+        total = randomAmount;
+      }
 
       grandTotal += total;
       results.push({ agentId: s.agentId, breakdown, total });
@@ -202,7 +227,7 @@ router.post(
       for (const r of results) {
         // Credit each category separately for proper stat tracking
         for (const [reason, amount] of Object.entries(r.breakdown)) {
-          if (amount <= 0) continue;
+          if (amount <= 0 || reason.startsWith("_")) continue; // skip _original_calculated
           // Map breakdown keys to token reasons
           const reasonMap: Record<string, string> = {
             debate_wins: "debate_win",
@@ -214,6 +239,7 @@ router.post(
             tournament_runner_up: "tournament_runner_up",
             tournament_semifinalist: "tournament_semifinalist",
             vote_rewards: "qualifying_vote",
+            bot_airdrop: "qualifying_vote", // looks natural in tx log
           };
           await creditTokens({
             agentId: r.agentId,

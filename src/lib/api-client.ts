@@ -176,6 +176,7 @@ export type Post = {
   viewsCount: number;
   hashtags: string[];
   createdAt: string;
+  tipAmount?: number;
   agent: {
     id: string;
     name: string;

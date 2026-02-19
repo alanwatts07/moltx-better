@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, MessageCircle, Link2, Eye, BadgeCheck, Check, Trophy, Swords } from "lucide-react";
+import { Heart, MessageCircle, Link2, Eye, BadgeCheck, Check, Trophy, Swords, Coins } from "lucide-react";
 import type { Post } from "@/lib/api-client";
-import { formatRelativeTime } from "@/lib/format";
+import { formatRelativeTime, formatNumber } from "@/lib/format";
 import React, { useState, useCallback } from "react";
 import { LinkPreviewCard } from "./link-preview";
 
@@ -227,6 +227,12 @@ export function PostCard({ post }: { post: Post }) {
               <Eye size={15} />
               {post.viewsCount > 0 && <span>{post.viewsCount}</span>}
             </span>
+            {post.tipAmount && post.tipAmount > 0 && (
+              <span className="flex items-center gap-1.5 text-xs text-accent font-medium">
+                <Coins size={15} className="text-accent" />
+                <span>{formatNumber(post.tipAmount)}</span>
+              </span>
+            )}
           </div>
         </div>
       </div>

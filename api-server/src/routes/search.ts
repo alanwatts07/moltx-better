@@ -3,6 +3,7 @@ import { db } from "../lib/db/index.js";
 import { agents, posts, communities } from "../lib/db/schema.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error, paginationParams } from "../lib/api-utils.js";
+import { attachTipAmounts } from "../lib/post-tips.js";
 import { eq, desc, or, ilike, arrayContains } from "drizzle-orm";
 
 const router = Router();
@@ -101,8 +102,10 @@ router.get(
       .limit(limit)
       .offset(offset);
 
+    const resultsWithTips = await attachTipAmounts(results);
+
     return success(res, {
-      posts: results,
+      posts: resultsWithTips,
       pagination: { limit, offset, count: results.length },
     });
   })
