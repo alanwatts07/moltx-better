@@ -57,7 +57,7 @@ function MatchCard({ match }: { match: TournamentMatch }) {
 
   return (
     <div
-      className={`rounded-lg border p-2.5 min-w-[180px] ${
+      className={`rounded-lg border p-2.5 min-w-0 w-full ${
         isBye
           ? "border-border/50 bg-foreground/[0.02] opacity-60"
           : isActive
@@ -208,97 +208,63 @@ function VisualBracket({ matches }: { matches: TournamentMatch[] }) {
     );
   }
 
+  // Build rounds array dynamically
+  const rounds: { label: string; matches: TournamentMatch[] }[] = [];
+  if (hasR16) rounds.push({ label: "Round of 16", matches: r16 });
+  if (hasQF) rounds.push({ label: "Quarterfinals", matches: qf });
+  if (hasSF) rounds.push({ label: "Semifinals", matches: sf });
+  rounds.push({ label: "Final", matches: final });
+
   return (
-    <div className="overflow-x-auto pb-4">
-      <div className="flex items-stretch gap-6 min-w-max px-4 py-4">
-        {/* R16 column */}
-        {hasR16 && (
-          <>
-            <div className="flex flex-col gap-4 flex-shrink-0">
-              <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
-                Round of 16
-              </p>
-              {r16.map((m) => (
-                <MatchCard key={m.id} match={m} />
-              ))}
-            </div>
-
-            {/* Connector lines R16 → QF */}
-            {hasQF && (
-              <div className="flex flex-col justify-around flex-shrink-0 w-6">
-                {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="flex flex-col items-center" style={{ height: "25%" }}>
-                    <div className="w-px flex-1 bg-border" />
-                    <div className="w-6 h-px bg-border" />
-                    <div className="w-px flex-1 bg-border" />
-                  </div>
+    <>
+      {/* Desktop: horizontal bracket */}
+      <div className="hidden md:block overflow-x-auto pb-4">
+        <div className="flex items-stretch gap-3 px-4 py-4" style={{ minWidth: `${rounds.length * 180}px` }}>
+          {rounds.map((round, ri) => (
+            <div key={round.label} className="contents">
+              {/* Round column */}
+              <div className={`flex flex-col gap-3 flex-1 min-w-[150px] ${ri > 0 ? "justify-around" : ""}`}>
+                <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
+                  {round.label}
+                </p>
+                {round.matches.map((m) => (
+                  <MatchCard key={m.id} match={m} />
                 ))}
               </div>
-            )}
-          </>
-        )}
 
-        {/* QF column */}
-        {hasQF && (
-          <>
-            <div className="flex flex-col justify-around gap-4 flex-shrink-0">
-              <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
-                Quarterfinals
-              </p>
-              {qf.map((m) => (
-                <MatchCard key={m.id} match={m} />
-              ))}
+              {/* Connector lines to next round */}
+              {ri < rounds.length - 1 && (
+                <div className="flex flex-col justify-around w-4 shrink-0">
+                  {Array.from({ length: Math.ceil(round.matches.length / 2) }).map((_, i) => (
+                    <div key={i} className="flex flex-col items-center" style={{ height: `${100 / Math.ceil(round.matches.length / 2)}%` }}>
+                      <div className="w-px flex-1 bg-border" />
+                      <div className="w-4 h-px bg-border" />
+                      <div className="w-px flex-1 bg-border" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-
-            {/* Connector lines QF → SF */}
-            {hasSF && (
-              <div className="flex flex-col justify-around flex-shrink-0 w-6">
-                {[0, 1].map((i) => (
-                  <div key={i} className="flex flex-col items-center" style={{ height: "50%" }}>
-                    <div className="w-px flex-1 bg-border" />
-                    <div className="w-6 h-px bg-border" />
-                    <div className="w-px flex-1 bg-border" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* SF column */}
-        {hasSF && (
-          <>
-            <div className="flex flex-col justify-around gap-4 flex-shrink-0">
-              <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
-                Semifinals
-              </p>
-              {sf.map((m) => (
-                <MatchCard key={m.id} match={m} />
-              ))}
-            </div>
-
-            {/* Connector lines SF → Final */}
-            <div className="flex flex-col justify-center flex-shrink-0 w-6">
-              <div className="flex flex-col items-center h-1/2">
-                <div className="w-px flex-1 bg-border" />
-                <div className="w-6 h-px bg-border" />
-                <div className="w-px flex-1 bg-border" />
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Final column */}
-        <div className="flex flex-col justify-center flex-shrink-0">
-          <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
-            Final
-          </p>
-          {final.map((m) => (
-            <MatchCard key={m.id} match={m} />
           ))}
         </div>
       </div>
-    </div>
+
+      {/* Mobile: stacked rounds */}
+      <div className="md:hidden px-4 py-4 space-y-6">
+        {rounds.map((round) => (
+          <div key={round.label}>
+            <p className="text-[10px] text-muted uppercase tracking-wider font-bold mb-2">
+              {round.label}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {round.matches.map((m) => (
+                <MatchCard key={m.id} match={m} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
