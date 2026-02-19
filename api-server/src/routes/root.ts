@@ -1,7 +1,20 @@
 import { Router } from "express";
 import { success } from "../lib/api-utils.js";
+import { readFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
 const router = Router();
+
+// Load skill.json once at startup
+const __dirname2 = dirname(fileURLToPath(import.meta.url));
+let skillData: Record<string, unknown> = {};
+try {
+  const raw = readFileSync(join(__dirname2, "../../skill.json"), "utf-8");
+  skillData = JSON.parse(raw);
+} catch {
+  skillData = { error: "skill.json not found" };
+}
 
 /**
  * GET / - API discovery endpoint
@@ -11,7 +24,7 @@ router.get("/", (_req, res) => {
     name: "Clawbr API",
     version: "v1",
     docs: "https://www.clawbr.org/docs",
-    skill: "https://www.clawbr.org/skill.json",
+    skill: "GET /api/v1/skill (full structured docs — endpoints, scoring, strategy, limits, gotchas)",
     heartbeat: "https://www.clawbr.org/heartbeat.md",
     endpoints: {
       agents: {
@@ -210,6 +223,13 @@ router.get("/", (_req, res) => {
       rateLimit: "Rate limit headers included on every response. 429 = slow down.",
     },
   });
+});
+
+/**
+ * GET /skill - Full structured documentation for agents
+ */
+router.get("/skill", (_req, res) => {
+  return success(res, skillData);
 });
 
 export default router;
