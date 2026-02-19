@@ -20,16 +20,39 @@ import { getSystemAgentId } from "./ollama.js";
 const DEFAULT_COMMUNITY_ID = "fe03eb80-9058-419c-8f30-e615b7f063d0";
 const TOURNAMENT_TIMEOUT_HOURS = 24;
 
-// Bracket feeder map: which positions feed into which next position
-// pos 1,2 → 5 (SF1), pos 3,4 → 6 (SF2), pos 5,6 → 7 (Final)
-const FEEDER_MAP: Record<number, number> = {
-  1: 5,
-  2: 5,
-  3: 6,
-  4: 6,
-  5: 7,
-  6: 7,
-};
+// Bracket feeder maps: which positions feed into which next position
+function getFeederMap(bracketSize: number): Record<number, number> {
+  if (bracketSize === 16) {
+    return {
+      // R16 → QF
+      1: 9, 2: 9, 3: 10, 4: 10, 5: 11, 6: 11, 7: 12, 8: 12,
+      // QF → SF
+      9: 13, 10: 13, 11: 14, 12: 14,
+      // SF → Final
+      13: 15, 14: 15,
+    };
+  }
+  // 8-player (and smaller — 4/2 brackets reuse subset of these positions)
+  return {
+    1: 5, 2: 5, 3: 6, 4: 6, 5: 7, 6: 7,
+  };
+}
+
+function getBracketSize(tournamentSize: number): number {
+  return tournamentSize >= 9 ? 16 : tournamentSize >= 5 ? 8 : tournamentSize >= 3 ? 4 : 2;
+}
+
+// Standard seeded bracket matchups for 16 players (Round of 16)
+const R16_MATCHUPS = [
+  { pos: 1, matchNumber: 1, highSeed: 1, lowSeed: 16 },
+  { pos: 2, matchNumber: 2, highSeed: 8, lowSeed: 9 },
+  { pos: 3, matchNumber: 3, highSeed: 4, lowSeed: 13 },
+  { pos: 4, matchNumber: 4, highSeed: 5, lowSeed: 12 },
+  { pos: 5, matchNumber: 5, highSeed: 2, lowSeed: 15 },
+  { pos: 6, matchNumber: 6, highSeed: 7, lowSeed: 10 },
+  { pos: 7, matchNumber: 7, highSeed: 3, lowSeed: 14 },
+  { pos: 8, matchNumber: 8, highSeed: 6, lowSeed: 11 },
+];
 
 // Standard seeded bracket matchups for 8 players
 const QF_MATCHUPS = [
@@ -54,12 +77,14 @@ function getMaxPostsForRound(
   tournament: typeof tournaments.$inferSelect,
   round: number
 ): number {
+  if (round === 0) return tournament.maxPostsR16 ?? 3;
   if (round === 1) return tournament.maxPostsQF ?? 3;
   if (round === 2) return tournament.maxPostsSF ?? 4;
   return tournament.maxPostsFinal ?? 5;
 }
 
 function getRoundLabel(round: number): string {
+  if (round === 0) return "Round of 16";
   if (round === 1) return "Quarterfinal";
   if (round === 2) return "Semifinal";
   return "Final";
@@ -69,6 +94,7 @@ function getBestOfForRound(
   tournament: typeof tournaments.$inferSelect,
   round: number
 ): number {
+  if (round === 0) return tournament.bestOfR16 ?? 1;
   if (round === 1) return tournament.bestOfQF ?? 1;
   if (round === 2) return tournament.bestOfSF ?? 1;
   return tournament.bestOfFinal ?? 1;
@@ -197,7 +223,7 @@ async function concludeMatch(
 
   // Eliminate loser
   if (loserId) {
-    const placement = match.round === 1 ? 5 : match.round === 2 ? 3 : 2;
+    const placement = match.round === 0 ? 9 : match.round === 1 ? 5 : match.round === 2 ? 3 : 2;
     await db
       .update(tournamentParticipants)
       .set({ eliminatedInRound: match.round, finalPlacement: placement })
@@ -216,7 +242,7 @@ async function concludeMatch(
         .where(eq(agents.id, loserId))
         .limit(1);
       const loserLabel = loser?.displayName || loser?.name || "Unknown";
-      const roundLabel = match.round === 1 ? "Quarterfinals" : match.round === 2 ? "Semifinals" : "Final";
+      const roundLabel = getRoundLabel(match.round) + "s";
       emitActivity({
         actorId: loserId,
         type: "tournament_eliminate",
@@ -233,7 +259,8 @@ async function concludeMatch(
   }
 
   // Advance winner to next round slot
-  const nextPos = FEEDER_MAP[match.bracketPosition];
+  const feederMap = getFeederMap(getBracketSize(tournament.size ?? 8));
+  const nextPos = feederMap[match.bracketPosition];
   if (!nextPos) return;
 
   const [nextMatch] = await db
@@ -250,8 +277,8 @@ async function concludeMatch(
   if (!nextMatch) return;
 
   // Determine which slot to fill (pro or con) based on bracket position
-  const feeders = Object.keys(FEEDER_MAP)
-    .filter((k) => FEEDER_MAP[Number(k)] === nextPos)
+  const feeders = Object.keys(feederMap)
+    .filter((k) => feederMap[Number(k)] === nextPos)
     .map(Number);
   const isFirstFeeder = match.bracketPosition === Math.min(...feeders);
 
@@ -272,7 +299,7 @@ async function concludeMatch(
       .where(eq(agents.id, winnerId))
       .limit(1);
     const winnerLabel = winner?.displayName || winner?.name || "Unknown";
-    const nextRoundLabel = nextMatch.round === 2 ? "Semifinals" : nextMatch.round === 3 ? "Final" : `Round ${nextMatch.round}`;
+    const nextRoundLabel = getRoundLabel(nextMatch.round) + "s";
     emitActivity({
       actorId: winnerId,
       type: "tournament_advance",
@@ -450,10 +477,10 @@ async function applyTournamentScoring(
 ): Promise<void> {
   // Standard ELO (K=30) applied to base debateScore — same as regular debates
   const K = 30;
-  const influenceGain = round === 1 ? 75 : round === 2 ? 100 : 150;
+  const influenceGain = round === 0 ? 50 : round === 1 ? 75 : round === 2 ? 100 : 150;
 
   // Flat tournament bonus per round win, scaled by series length (1x/1.5x/2x)
-  const baseBonus = round === 1 ? 15 : round === 2 ? 30 : 0; // final win bonus handled by completeTournament (+100)
+  const baseBonus = round === 0 ? 10 : round === 1 ? 15 : round === 2 ? 30 : 0; // final win bonus handled by completeTournament (+100)
   const seriesMultiplier = bestOf >= 5 ? 2 : bestOf >= 3 ? 1.5 : 1;
   const tournamentBonus = Math.round(baseBonus * seriesMultiplier);
 
@@ -746,4 +773,4 @@ export async function getHigherSeedWinner(
   return proSeed <= conSeed ? match.proAgentId : match.conAgentId;
 }
 
-export { TOURNAMENT_TIMEOUT_HOURS, QF_MATCHUPS, SF_MATCHUPS, FINAL_MATCHUP, FEEDER_MAP, getMaxPostsForRound, getRoundLabel, getBestOfForRound };
+export { TOURNAMENT_TIMEOUT_HOURS, R16_MATCHUPS, QF_MATCHUPS, SF_MATCHUPS, FINAL_MATCHUP, getFeederMap, getBracketSize, getMaxPostsForRound, getRoundLabel, getBestOfForRound };

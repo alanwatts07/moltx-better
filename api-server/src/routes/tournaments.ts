@@ -19,10 +19,13 @@ import { isValidUuid } from "../lib/validators/uuid.js";
 import {
   createTournamentDebate,
   advanceTournamentBracket,
+  R16_MATCHUPS,
   QF_MATCHUPS,
   SF_MATCHUPS,
   FINAL_MATCHUP,
-  FEEDER_MAP,
+  getFeederMap,
+  getBracketSize,
+  getRoundLabel,
 } from "../lib/tournament-bracket.js";
 import { eq, desc, asc, and, sql, inArray } from "drizzle-orm";
 import { emitActivity } from "../lib/activity.js";
@@ -203,12 +206,7 @@ router.get(
         ? { ...matchAgentMap[m.conAgentId], seed: seedMap[m.conAgentId] ?? null }
         : null,
       winnerAgent: m.winnerId ? matchAgentMap[m.winnerId] ?? null : null,
-      roundLabel:
-        m.round === 1
-          ? "Quarterfinal"
-          : m.round === 2
-            ? "Semifinal"
-            : "Final",
+      roundLabel: getRoundLabel(m.round),
     }));
 
     // Winner info
@@ -289,6 +287,7 @@ router.get(
 
     // Only include rounds that have matches
     const allRounds = [
+      { name: "Round of 16", round: 0 },
       { name: "Quarterfinals", round: 1 },
       { name: "Semifinals", round: 2 },
       { name: "Final", round: 3 },
@@ -364,10 +363,12 @@ router.post(
       description,
       community_id,
       registration_closes_at,
+      max_posts_r16,
       max_posts_qf,
       max_posts_sf,
       max_posts_final,
       size: requestedSize,
+      best_of_r16,
       best_of_qf,
       best_of_sf,
       best_of_final,
@@ -377,11 +378,12 @@ router.post(
       return error(res, "title and topic are required", 400);
     }
 
-    // Validate size (2-8)
-    const size = requestedSize ? Math.max(2, Math.min(8, Math.floor(Number(requestedSize)))) : 8;
+    // Validate size (2-16)
+    const size = requestedSize ? Math.max(2, Math.min(16, Math.floor(Number(requestedSize)))) : 8;
 
     // Validate best-of params (must be 1, 3, or 5)
     const validBo = [1, 3, 5];
+    const boR16 = validBo.includes(best_of_r16) ? best_of_r16 : 1;
     const boQF = validBo.includes(best_of_qf) ? best_of_qf : 1;
     const boSF = validBo.includes(best_of_sf) ? best_of_sf : 1;
     const boFinal = validBo.includes(best_of_final) ? best_of_final : 1;
@@ -404,9 +406,11 @@ router.post(
         registrationClosesAt: registration_closes_at
           ? new Date(registration_closes_at)
           : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // default 7 days
+        maxPostsR16: max_posts_r16 ?? 3,
         maxPostsQF: max_posts_qf ?? 3,
         maxPostsSF: max_posts_sf ?? 4,
         maxPostsFinal: max_posts_final ?? 5,
+        bestOfR16: boR16,
         bestOfQF: boQF,
         bestOfSF: boSF,
         bestOfFinal: boFinal,
@@ -414,11 +418,29 @@ router.post(
       .returning();
 
     // Generate match slots based on bracket size
-    // Bracket size: 8 for 5-8 players, 4 for 3-4, 2 for 2
-    const bracketSize = size >= 5 ? 8 : size >= 3 ? 4 : 2;
+    const bracketSize = size >= 9 ? 16 : size >= 5 ? 8 : size >= 3 ? 4 : 2;
     const matchSlots: { round: number; matchNumber: number; bracketPosition: number }[] = [];
 
-    if (bracketSize === 8) {
+    if (bracketSize === 16) {
+      // 8 R16 + 4 QF + 2 SF + 1 Final
+      matchSlots.push(
+        { round: 0, matchNumber: 1, bracketPosition: 1 },
+        { round: 0, matchNumber: 2, bracketPosition: 2 },
+        { round: 0, matchNumber: 3, bracketPosition: 3 },
+        { round: 0, matchNumber: 4, bracketPosition: 4 },
+        { round: 0, matchNumber: 5, bracketPosition: 5 },
+        { round: 0, matchNumber: 6, bracketPosition: 6 },
+        { round: 0, matchNumber: 7, bracketPosition: 7 },
+        { round: 0, matchNumber: 8, bracketPosition: 8 },
+        { round: 1, matchNumber: 1, bracketPosition: 9 },
+        { round: 1, matchNumber: 2, bracketPosition: 10 },
+        { round: 1, matchNumber: 3, bracketPosition: 11 },
+        { round: 1, matchNumber: 4, bracketPosition: 12 },
+        { round: 2, matchNumber: 1, bracketPosition: 13 },
+        { round: 2, matchNumber: 2, bracketPosition: 14 },
+        { round: 3, matchNumber: 1, bracketPosition: 15 },
+      );
+    } else if (bracketSize === 8) {
       // 4 QF + 2 SF + 1 Final
       matchSlots.push(
         { round: 1, matchNumber: 1, bracketPosition: 1 },
@@ -493,7 +515,7 @@ async function startTournament(tournament: typeof tournaments.$inferSelect, forc
   const actualSize = force ? participants.length : declaredSize;
 
   // Determine bracket size: round up to nearest power of 2
-  const bracketSize = actualSize >= 5 ? 8 : actualSize >= 3 ? 4 : 2;
+  const bracketSize = actualSize >= 9 ? 16 : actualSize >= 5 ? 8 : actualSize >= 3 ? 4 : 2;
 
   // If force-starting with fewer players, update tournament size and re-create match slots
   if (force && actualSize !== declaredSize) {
@@ -508,7 +530,25 @@ async function startTournament(tournament: typeof tournaments.$inferSelect, forc
       .where(eq(tournamentMatches.tournamentId, tournament.id));
 
     const matchSlots: { round: number; matchNumber: number; bracketPosition: number }[] = [];
-    if (bracketSize === 8) {
+    if (bracketSize === 16) {
+      matchSlots.push(
+        { round: 0, matchNumber: 1, bracketPosition: 1 },
+        { round: 0, matchNumber: 2, bracketPosition: 2 },
+        { round: 0, matchNumber: 3, bracketPosition: 3 },
+        { round: 0, matchNumber: 4, bracketPosition: 4 },
+        { round: 0, matchNumber: 5, bracketPosition: 5 },
+        { round: 0, matchNumber: 6, bracketPosition: 6 },
+        { round: 0, matchNumber: 7, bracketPosition: 7 },
+        { round: 0, matchNumber: 8, bracketPosition: 8 },
+        { round: 1, matchNumber: 1, bracketPosition: 9 },
+        { round: 1, matchNumber: 2, bracketPosition: 10 },
+        { round: 1, matchNumber: 3, bracketPosition: 11 },
+        { round: 1, matchNumber: 4, bracketPosition: 12 },
+        { round: 2, matchNumber: 1, bracketPosition: 13 },
+        { round: 2, matchNumber: 2, bracketPosition: 14 },
+        { round: 3, matchNumber: 1, bracketPosition: 15 },
+      );
+    } else if (bracketSize === 8) {
       matchSlots.push(
         { round: 1, matchNumber: 1, bracketPosition: 1 },
         { round: 1, matchNumber: 2, bracketPosition: 2 },
@@ -590,8 +630,8 @@ async function startTournament(tournament: typeof tournaments.$inferSelect, forc
   );
 
   // Select matchup set by bracket size
-  const matchups = bracketSize === 8 ? QF_MATCHUPS : bracketSize === 4 ? SF_MATCHUPS : FINAL_MATCHUP;
-  const startingRound = bracketSize === 8 ? 1 : bracketSize === 4 ? 2 : 3;
+  const matchups = bracketSize === 16 ? R16_MATCHUPS : bracketSize === 8 ? QF_MATCHUPS : bracketSize === 4 ? SF_MATCHUPS : FINAL_MATCHUP;
+  const startingRound = bracketSize === 16 ? 0 : bracketSize === 8 ? 1 : bracketSize === 4 ? 2 : 3;
 
   // Update tournament status
   await db
@@ -626,8 +666,9 @@ async function startTournament(tournament: typeof tournaments.$inferSelect, forc
         })
         .where(eq(tournamentMatches.id, match.id));
 
-      // Advance high seed to next round via FEEDER_MAP
-      const nextPos = FEEDER_MAP[match.bracketPosition];
+      // Advance high seed to next round via feeder map
+      const feederMap = getFeederMap(bracketSize);
+      const nextPos = feederMap[match.bracketPosition];
       if (nextPos) {
         const [nextMatch] = await db
           .select()
@@ -642,8 +683,8 @@ async function startTournament(tournament: typeof tournaments.$inferSelect, forc
 
         if (nextMatch) {
           // Determine slot: lower bracket position fills pro, higher fills con
-          const feeders = Object.keys(FEEDER_MAP)
-            .filter((k) => FEEDER_MAP[Number(k)] === nextPos)
+          const feeders = Object.keys(feederMap)
+            .filter((k) => feederMap[Number(k)] === nextPos)
             .map(Number);
           const isFirstFeeder = match.bracketPosition === Math.min(...feeders);
           const updateField = isFirstFeeder

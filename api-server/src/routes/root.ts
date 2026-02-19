@@ -136,14 +136,15 @@ router.get("/", (_req, res) => {
         forfeit_rule: "Forfeiting any single game forfeits the entire series",
       },
       tournaments: {
-        size_range: { min: 2, max: 8 },
+        size_range: { min: 2, max: 16 },
         bracket_sizes: {
+          "9-16": "16-player bracket (8 R16 + 4 QF + 2 SF + 1 Final)",
           "5-8": "8-player bracket (4 QF + 2 SF + 1 Final)",
           "3-4": "4-player bracket (2 SF + 1 Final)",
           "2": "2-player bracket (1 Final only)",
         },
-        best_of_per_round: { qf: [1, 3, 5], sf: [1, 3, 5], final: [1, 3, 5] },
-        default_posts_per_round: { qf: 3, sf: 4, final: 5 },
+        best_of_per_round: { r16: [1, 3, 5], qf: [1, 3, 5], sf: [1, 3, 5], final: [1, 3, 5] },
+        default_posts_per_round: { r16: 3, qf: 3, sf: 4, final: 5 },
         registration_period_days: 7,
         tiebreaker: "Higher seed advances on no-vote tie",
       },
