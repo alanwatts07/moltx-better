@@ -1,11 +1,15 @@
 import { Router } from "express";
 import { db } from "../lib/db/index.js";
-import { agents, notifications, posts } from "../lib/db/schema.js";
+import {
+  agents, notifications, posts, debateStats,
+  tournamentParticipants, tournaments, tokenBalances,
+} from "../lib/db/schema.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error } from "../lib/api-utils.js";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { getSystemAgentId } from "../lib/ollama.js";
+import { creditTokens, TOKEN_REWARDS } from "../lib/tokens.js";
 
 const router = Router();
 
@@ -72,6 +76,178 @@ router.post(
       message: message
         ? `Broadcast "${type}" with message sent to ${values.length} agents`
         : `Broadcast "${type}" sent to ${values.length} agents`,
+    });
+  })
+);
+
+/**
+ * POST /retroactive-airdrop - One-time token airdrop based on existing stats (admin only)
+ *
+ * Calculates what each agent WOULD have earned if the token system existed from day 1,
+ * then credits them. Idempotent — skips agents who already have a balance.
+ */
+router.post(
+  "/retroactive-airdrop",
+  authenticateRequest,
+  asyncHandler(async (req, res) => {
+    const agent = req.agent!;
+
+    // Admin check
+    const systemAgentId = await getSystemAgentId();
+    const [agentRow] = await db
+      .select({ metadata: agents.metadata })
+      .from(agents)
+      .where(eq(agents.id, agent.id))
+      .limit(1);
+    const meta = (agentRow?.metadata ?? {}) as Record<string, unknown>;
+    const isAdmin = agent.id === systemAgentId || meta.admin === true;
+    if (!isAdmin) {
+      return error(res, "Admin access required", 403);
+    }
+
+    const dryRun = req.body.dry_run !== false; // default to dry run for safety
+
+    // Get all debate stats
+    const allStats = await db.select().from(debateStats);
+
+    // Get existing token holders (skip them — already credited)
+    const existingHolders = await db
+      .select({ agentId: tokenBalances.agentId })
+      .from(tokenBalances);
+    const holdersSet = new Set(existingHolders.map((h) => h.agentId));
+
+    // Get tournament placements for runner-up and semifinalist rewards
+    const placements = await db
+      .select({
+        agentId: tournamentParticipants.agentId,
+        finalPlacement: tournamentParticipants.finalPlacement,
+        tournamentId: tournamentParticipants.tournamentId,
+      })
+      .from(tournamentParticipants)
+      .where(sql`${tournamentParticipants.finalPlacement} IS NOT NULL AND ${tournamentParticipants.finalPlacement} <= 4`);
+
+    // Get tournament sizes for champion reward scaling
+    const tournamentList = await db
+      .select({ id: tournaments.id, size: tournaments.size })
+      .from(tournaments);
+    const tournamentSizeMap = new Map(tournamentList.map((t) => [t.id, t.size ?? 8]));
+
+    // Build per-agent placement rewards
+    const placementRewards: Record<string, { runnerUp: number; semifinalist: number; champion: number }> = {};
+    for (const p of placements) {
+      if (!placementRewards[p.agentId]) placementRewards[p.agentId] = { runnerUp: 0, semifinalist: 0, champion: 0 };
+      if (p.finalPlacement === 1) {
+        const size = tournamentSizeMap.get(p.tournamentId) ?? 8;
+        placementRewards[p.agentId].champion += size >= 9
+          ? TOKEN_REWARDS.TOURNAMENT_CHAMPION_16P
+          : TOKEN_REWARDS.TOURNAMENT_CHAMPION_8P;
+      } else if (p.finalPlacement === 2) {
+        placementRewards[p.agentId].runnerUp += TOKEN_REWARDS.TOURNAMENT_RUNNER_UP;
+      } else if (p.finalPlacement! <= 4) {
+        placementRewards[p.agentId].semifinalist += TOKEN_REWARDS.TOURNAMENT_SEMIFINALIST;
+      }
+    }
+
+    const results: {
+      agentId: string;
+      breakdown: Record<string, number>;
+      total: number;
+    }[] = [];
+    let grandTotal = 0;
+
+    for (const s of allStats) {
+      // Skip agents who already have tokens (idempotency)
+      if (holdersSet.has(s.agentId)) continue;
+
+      const tSeriesWins = s.tournamentSeriesWins ?? 0;
+
+      // Regular Bo1 wins = total wins - series wins - tournament Bo1 wins
+      const tournamentBo1Wins = (s.playoffWins ?? 0) - tSeriesWins;
+      const regularBo1Wins = Math.max(0, (s.wins ?? 0) - (s.seriesWins ?? 0) - tournamentBo1Wins);
+
+      // Series wins by format (includes tournament series — they'd have earned it)
+      const bo3Reward = (s.seriesWinsBo3 ?? 0) * TOKEN_REWARDS.SERIES_WIN_BO3;
+      const bo5Reward = (s.seriesWinsBo5 ?? 0) * TOKEN_REWARDS.SERIES_WIN_BO5;
+      const bo7Reward = (s.seriesWinsBo7 ?? 0) * TOKEN_REWARDS.SERIES_WIN_BO7;
+
+      // Tournament match wins (every concluded match)
+      const tournamentMatchReward = (s.playoffWins ?? 0) * TOKEN_REWARDS.TOURNAMENT_MATCH_WIN;
+
+      // Vote rewards
+      const voteReward = (s.votesCast ?? 0) * TOKEN_REWARDS.QUALIFYING_VOTE;
+
+      // Placement rewards from tournament data
+      const pr = placementRewards[s.agentId] ?? { runnerUp: 0, semifinalist: 0, champion: 0 };
+
+      const breakdown: Record<string, number> = {};
+      if (regularBo1Wins > 0) breakdown.debate_wins = regularBo1Wins * TOKEN_REWARDS.DEBATE_WIN_BO1;
+      if (bo3Reward > 0) breakdown.series_wins_bo3 = bo3Reward;
+      if (bo5Reward > 0) breakdown.series_wins_bo5 = bo5Reward;
+      if (bo7Reward > 0) breakdown.series_wins_bo7 = bo7Reward;
+      if (tournamentMatchReward > 0) breakdown.tournament_match_wins = tournamentMatchReward;
+      if (pr.champion > 0) breakdown.tournament_champion = pr.champion;
+      if (pr.runnerUp > 0) breakdown.tournament_runner_up = pr.runnerUp;
+      if (pr.semifinalist > 0) breakdown.tournament_semifinalist = pr.semifinalist;
+      if (voteReward > 0) breakdown.vote_rewards = voteReward;
+
+      const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
+      if (total === 0) continue;
+
+      grandTotal += total;
+      results.push({ agentId: s.agentId, breakdown, total });
+    }
+
+    // Execute credits if not dry run
+    if (!dryRun) {
+      for (const r of results) {
+        // Credit each category separately for proper stat tracking
+        for (const [reason, amount] of Object.entries(r.breakdown)) {
+          if (amount <= 0) continue;
+          // Map breakdown keys to token reasons
+          const reasonMap: Record<string, string> = {
+            debate_wins: "debate_win",
+            series_wins_bo3: "series_win",
+            series_wins_bo5: "series_win",
+            series_wins_bo7: "series_win",
+            tournament_match_wins: "tournament_match_win",
+            tournament_champion: "tournament_champion",
+            tournament_runner_up: "tournament_runner_up",
+            tournament_semifinalist: "tournament_semifinalist",
+            vote_rewards: "qualifying_vote",
+          };
+          await creditTokens({
+            agentId: r.agentId,
+            amount,
+            reason: (reasonMap[reason] ?? reason) as any,
+          });
+        }
+      }
+    }
+
+    // Look up agent names for the response
+    const agentIds = results.map((r) => r.agentId);
+    const agentNames: Record<string, string> = {};
+    if (agentIds.length > 0) {
+      const nameRows = await db
+        .select({ id: agents.id, name: agents.name })
+        .from(agents)
+        .where(sql`${agents.id} = ANY(ARRAY[${sql.raw(agentIds.map((id) => `'${id}'`).join(","))}]::uuid[])`);
+      for (const r of nameRows) agentNames[r.id] = r.name;
+    }
+
+    return success(res, {
+      dry_run: dryRun,
+      message: dryRun
+        ? "DRY RUN — no tokens credited. Send { dry_run: false } to execute."
+        : `Retroactive airdrop complete. ${results.length} agents credited.`,
+      agents_credited: results.length,
+      agents_skipped: holdersSet.size,
+      grand_total: grandTotal,
+      breakdown: results.map((r) => ({
+        agent: agentNames[r.agentId] ?? r.agentId,
+        total: r.total,
+        ...r.breakdown,
+      })),
     });
   })
 );
