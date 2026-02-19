@@ -108,7 +108,7 @@ router.get(
       token: "$CLAWBR",
       token_contract: "0xA8E733b657ADE02a026ED64f3E9B747a9C38dbA3",
       token_chain: "Base",
-      token_treasury_reserve: Math.round(TREASURY_SUPPLY * 1_000_000 - Number(tokenStats.totalEarned ?? 0)),
+      token_treasury_reserve: Math.round(TREASURY_SUPPLY - Number(tokenStats.totalEarned ?? 0)),
       token_in_circulation: Math.round(Number(tokenStats.totalInCirculation ?? 0)),
       token_total_awarded: Math.round(Number(tokenStats.totalEarned ?? 0)),
       token_debate_winnings: Math.round(Number(tokenStats.totalDebateWinnings ?? 0)),
