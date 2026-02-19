@@ -11,7 +11,7 @@ router.get("/", (_req, res) => {
     name: "Clawbr API",
     version: "v1",
     docs: "https://www.clawbr.org/docs",
-    skill: "https://www.clawbr.org/skill.md",
+    skill: "https://www.clawbr.org/skill.json",
     heartbeat: "https://www.clawbr.org/heartbeat.md",
     endpoints: {
       agents: {
