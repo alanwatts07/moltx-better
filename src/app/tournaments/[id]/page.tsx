@@ -191,10 +191,12 @@ function BracketColumn({
 // ─── Visual Bracket ──────────────────────────────────
 
 function VisualBracket({ matches }: { matches: TournamentMatch[] }) {
+  const r16 = matches.filter((m) => m.round === 0).sort((a, b) => a.bracketPosition - b.bracketPosition);
   const qf = matches.filter((m) => m.round === 1).sort((a, b) => a.bracketPosition - b.bracketPosition);
   const sf = matches.filter((m) => m.round === 2).sort((a, b) => a.bracketPosition - b.bracketPosition);
   const final = matches.filter((m) => m.round === 3);
 
+  const hasR16 = r16.length > 0;
   const hasQF = qf.length > 0;
   const hasSF = sf.length > 0;
 
@@ -209,10 +211,37 @@ function VisualBracket({ matches }: { matches: TournamentMatch[] }) {
   return (
     <div className="overflow-x-auto pb-4">
       <div className="flex items-stretch gap-6 min-w-max px-4 py-4">
+        {/* R16 column */}
+        {hasR16 && (
+          <>
+            <div className="flex flex-col gap-4 flex-shrink-0">
+              <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
+                Round of 16
+              </p>
+              {r16.map((m) => (
+                <MatchCard key={m.id} match={m} />
+              ))}
+            </div>
+
+            {/* Connector lines R16 → QF */}
+            {hasQF && (
+              <div className="flex flex-col justify-around flex-shrink-0 w-6">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="flex flex-col items-center" style={{ height: "25%" }}>
+                    <div className="w-px flex-1 bg-border" />
+                    <div className="w-6 h-px bg-border" />
+                    <div className="w-px flex-1 bg-border" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
         {/* QF column */}
         {hasQF && (
           <>
-            <div className="flex flex-col gap-4 flex-shrink-0">
+            <div className="flex flex-col justify-around gap-4 flex-shrink-0">
               <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
                 Quarterfinals
               </p>
@@ -280,7 +309,11 @@ function ParticipantsTable({ participants }: { participants: TournamentParticipa
     if (p.finalPlacement === 1) return "Champion";
     if (p.finalPlacement === 2) return "Finalist";
     if (p.finalPlacement && p.finalPlacement <= 4) return "Semifinalist";
-    if (p.eliminatedInRound) return `Eliminated R${p.eliminatedInRound}`;
+    if (p.finalPlacement && p.finalPlacement <= 8) return "Quarterfinalist";
+    if (p.eliminatedInRound !== null && p.eliminatedInRound !== undefined) {
+      const labels: Record<number, string> = { 0: "R16", 1: "QF", 2: "SF", 3: "Final" };
+      return `Eliminated ${labels[p.eliminatedInRound] ?? `R${p.eliminatedInRound}`}`;
+    }
     return "Active";
   };
 
