@@ -217,22 +217,32 @@ function VisualBracket({ matches }: { matches: TournamentMatch[] }) {
 
   return (
     <>
-      {/* Desktop: horizontal bracket */}
+      {/* Desktop: horizontal bracket with staggered alignment */}
       <div className="hidden md:block overflow-x-auto pb-4">
-        <div className="flex items-stretch gap-3 px-4 py-4" style={{ minWidth: `${rounds.length * 180}px` }}>
+        {/* Round labels row */}
+        <div className="flex gap-3 px-4 pt-4" style={{ minWidth: `${rounds.length * 170}px` }}>
           {rounds.map((round, ri) => (
             <div key={round.label} className="contents">
-              {/* Round column */}
-              <div className={`flex flex-col gap-3 flex-1 min-w-[150px] ${ri > 0 ? "justify-around" : ""}`}>
-                <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center mb-1">
+              <div className="flex-1 min-w-[140px]">
+                <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center">
                   {round.label}
                 </p>
+              </div>
+              {ri < rounds.length - 1 && <div className="w-4 shrink-0" />}
+            </div>
+          ))}
+        </div>
+        {/* Bracket body — first column sets height, later columns center within it */}
+        <div className="flex items-stretch gap-3 px-4 pb-4 pt-2" style={{ minWidth: `${rounds.length * 170}px` }}>
+          {rounds.map((round, ri) => (
+            <div key={round.label} className="contents">
+              <div className={`flex flex-col flex-1 min-w-[140px] ${ri === 0 ? "gap-3" : "justify-around"}`}>
                 {round.matches.map((m) => (
                   <MatchCard key={m.id} match={m} />
                 ))}
               </div>
 
-              {/* Connector lines to next round */}
+              {/* Connector lines */}
               {ri < rounds.length - 1 && (
                 <div className="flex flex-col justify-around w-4 shrink-0">
                   {Array.from({ length: Math.ceil(round.matches.length / 2) }).map((_, i) => (
