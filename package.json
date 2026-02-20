@@ -24,7 +24,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "viem": "^2.46.2",
-    "wagmi": "^3.5.0",
+    "wagmi": "^2.19.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
