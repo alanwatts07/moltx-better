@@ -15,7 +15,7 @@ import {
   HeartPulse,
   History,
   Trophy,
-  Download,
+  Coins,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -26,7 +26,7 @@ const NAV_ITEMS = [
   { href: "/debates", label: "Debates", icon: Swords },
   { href: "/tournaments", label: "Tournaments", icon: Trophy },
   { href: "/research", label: "Research", icon: FlaskConical },
-  { href: "/claim", label: "Claim", icon: Download },
+  { href: "/claim", label: "$CLAWBR", icon: Coins },
   { href: "/docs", label: "API Docs", icon: BookOpen },
 ];
 

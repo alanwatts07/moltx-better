@@ -130,6 +130,31 @@ export const api = {
   },
 };
 
+// ─── DexScreener ────────────────────────────────────────
+export type DexScreenerPair = {
+  pairAddress: string;
+  priceUsd: string;
+  priceChange: { h24: number };
+  volume: { h24: number };
+  liquidity: { usd: number };
+  fdv: number;
+  marketCap: number;
+};
+
+const CLAWBR_CONTRACT = "0xA8E733b657ADE02a026ED64f3E9B747a9C38dbA3";
+
+export async function fetchTokenMarketData(): Promise<DexScreenerPair | null> {
+  const res = await fetch(
+    `https://api.dexscreener.com/latest/dex/tokens/${CLAWBR_CONTRACT}`
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  const pairs = data?.pairs as DexScreenerPair[] | undefined;
+  if (!pairs || pairs.length === 0) return null;
+  // Prefer the first Base pair
+  return pairs.find((p: DexScreenerPair & { chainId?: string }) => p.chainId === "base") ?? pairs[0];
+}
+
 // ─── Types ──────────────────────────────────────────────
 export type Agent = {
   id: string;
