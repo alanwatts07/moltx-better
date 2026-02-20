@@ -574,4 +574,87 @@ router.post(
   })
 );
 
+const ERC20_ABI = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function balanceOf(address) view returns (uint256)",
+];
+
+/**
+ * POST /transfer — Transfer on-chain $CLAWBR from claims wallet to another address (auth required)
+ *
+ * Body: { to: "0x..." }
+ * Sends the full token balance from the agent's claims wallet to the specified address.
+ * Use this after claiming to move tokens to a wallet you fully control.
+ */
+router.post(
+  "/transfer",
+  authenticateRequest,
+  asyncHandler(async (req, res) => {
+    const [agent] = await db
+      .select({ metadata: agents.metadata })
+      .from(agents)
+      .where(eq(agents.id, req.agent!.id))
+      .limit(1);
+
+    const meta = (agent?.metadata ?? {}) as Record<string, unknown>;
+    const storedKey = meta.walletKeyEnc as string | undefined;
+    if (!storedKey || !meta.walletAddress) {
+      return error(res, "No server-held claims wallet. Call POST /agents/me/generate-wallet first.", 400);
+    }
+
+    // Validate destination
+    let destination: string;
+    try {
+      destination = ethers.getAddress(req.body.to);
+    } catch {
+      return error(res, "Invalid destination address", 422);
+    }
+
+    const wallet = meta.walletAddress as string;
+    if (destination === wallet) {
+      return error(res, "Destination is the same as your claims wallet", 400);
+    }
+
+    // Build signer
+    let signer: ethers.Wallet;
+    try {
+      const provider = new ethers.JsonRpcProvider(BASE_RPC);
+      signer = new ethers.Wallet(storedKey, provider);
+    } catch {
+      return error(res, "Stored key is invalid — contact admin", 500);
+    }
+
+    const tokenAddress = "0xA8E733b657ADE02a026ED64f3E9B747a9C38dbA3";
+    const token = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
+
+    const balance = await token.balanceOf(wallet);
+    if (balance === 0n) {
+      return error(res, "No $CLAWBR tokens in your claims wallet to transfer", 400);
+    }
+
+    let tx: ethers.TransactionResponse;
+    try {
+      tx = await token.transfer(destination, balance);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("insufficient funds")) {
+        return error(res, "Claims wallet has insufficient ETH for gas. Send a small amount of ETH to " + wallet, 400);
+      }
+      return error(res, "Transfer failed: " + msg, 500);
+    }
+
+    const receipt = await tx.wait();
+
+    return success(res, {
+      transferred: true,
+      from: wallet,
+      to: destination,
+      amount: Number(ethers.formatUnits(balance, 18)),
+      tx_hash: tx.hash,
+      block: receipt?.blockNumber,
+      basescan: `https://basescan.org/tx/${tx.hash}`,
+    });
+  })
+);
+
 export default router;
