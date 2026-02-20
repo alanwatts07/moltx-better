@@ -59,11 +59,16 @@ contract ClawbrDistributor is Ownable {
     }
 
     /**
-     * @notice Update the Merkle root (for new snapshot rounds).
+     * @notice Update the Merkle root and reset the claimed bitmap (for new snapshot rounds).
      */
-    function updateMerkleRoot(bytes32 _merkleRoot) external onlyOwner {
+    function updateMerkleRoot(bytes32 _merkleRoot, uint256 maxIndex) external onlyOwner {
         emit MerkleRootUpdated(merkleRoot, _merkleRoot);
         merkleRoot = _merkleRoot;
+        // Reset bitmap slots that were used in the previous round
+        uint256 maxWord = maxIndex / 256;
+        for (uint256 i = 0; i <= maxWord; i++) {
+            delete _claimedBitmap[i];
+        }
     }
 
     /**

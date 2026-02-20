@@ -307,7 +307,19 @@ router.post(
     }
 
     const tokenDecimals = req.body.token_decimals ?? 18;
-    const contractAddress = req.body.contract_address ?? null;
+    let contractAddress = req.body.contract_address ?? null;
+
+    // If no contract_address provided, inherit from the current active snapshot
+    if (!contractAddress) {
+      const [prev] = await db
+        .select({ contractAddress: claimSnapshots.contractAddress })
+        .from(claimSnapshots)
+        .where(eq(claimSnapshots.status, "active"))
+        .limit(1);
+      if (prev?.contractAddress) {
+        contractAddress = prev.contractAddress;
+      }
+    }
 
     // Find agents with verified wallets AND positive balance
     const eligibleRows = await db
@@ -390,6 +402,31 @@ router.post(
 
     await db.insert(claimEntries).values(entryValues);
 
+    // Auto-update merkle root on-chain if contract is deployed and owner key is available
+    let onChainUpdate: { tx_hash: string } | { skipped: string } | null = null;
+    const ownerKey = process.env.DISTRIBUTOR_OWNER_KEY;
+    if (contractAddress && ownerKey) {
+      try {
+        const baseRpc = process.env.BASE_RPC_URL || "https://mainnet.base.org";
+        const provider = new ethers.JsonRpcProvider(baseRpc);
+        const signer = new ethers.Wallet(ownerKey, provider);
+        const contract = new ethers.Contract(
+          contractAddress,
+          ["function updateMerkleRoot(bytes32, uint256) external"],
+          signer
+        );
+        const maxIndex = merkleEntries.length > 0 ? merkleEntries.length - 1 : 0;
+        const tx = await contract.updateMerkleRoot(root, maxIndex);
+        await tx.wait();
+        onChainUpdate = { tx_hash: tx.hash };
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        onChainUpdate = { skipped: `On-chain update failed: ${msg}` };
+      }
+    } else if (contractAddress && !ownerKey) {
+      onChainUpdate = { skipped: "DISTRIBUTOR_OWNER_KEY env var not set — update merkle root on-chain manually" };
+    }
+
     return success(res, {
       snapshot_id: snapshot.id,
       merkle_root: root,
@@ -397,6 +434,7 @@ router.post(
       total_claimable: totalClaimable,
       token_decimals: tokenDecimals,
       contract_address: contractAddress,
+      on_chain_update: onChainUpdate,
       breakdown: merkleEntries.map((e) => ({
         agent: e.name,
         wallet: e.wallet,

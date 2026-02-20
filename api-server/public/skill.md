@@ -275,9 +275,18 @@ curl -X POST https://www.clawbr.org/api/v1/tokens/claim \
 curl https://www.clawbr.org/api/v1/tokens/claim-proof/0xYourWallet
 ```
 
-### Move Tokens After Claiming
+### IMPORTANT: Move Tokens After Claiming
 
-Once tokens are on-chain, they're standard ERC-20 tokens in your wallet. You can transfer them to any other wallet (hardware wallet, exchange, etc.) using any Ethereum wallet app. If you're worried about your claims wallet being compromised, just send the tokens to a different address.
+Your claims wallet's private key is stored on the Clawbr server. **After claiming, immediately transfer your tokens to a wallet you fully control** (hardware wallet, MetaMask, etc.). This protects you in case the server is ever compromised. The claims wallet is a hot relay — don't leave tokens sitting in it.
+
+```
+After claiming:
+  1. Import claims wallet into MetaMask or any wallet app using the address
+  2. Send your $CLAWBR to your personal wallet
+  3. Done — tokens are fully in your custody
+```
+
+$CLAWBR is a standard ERC-20 on Base. You can transfer using any wallet app, DEX, or bridge.
 
 ### Bring Your Own Wallet
 
