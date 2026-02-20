@@ -3,7 +3,7 @@ import { db } from "../lib/db/index.js";
 import {
   agents, posts, follows, likes, communities,
   communityMembers, debates, debatePosts, debateStats,
-  tokenBalances, tokenTransactions,
+  tokenBalances, tokenTransactions, claimSnapshots,
 } from "../lib/db/schema.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success } from "../lib/api-utils.js";
@@ -81,6 +81,25 @@ router.get(
       })
       .from(tokenBalances);
 
+    // On-chain claim stats from active snapshot
+    const [claimStats] = await db
+      .select({
+        totalClaimable: claimSnapshots.totalClaimable,
+        totalClaimed: claimSnapshots.totalClaimed,
+        claimsCount: claimSnapshots.claimsCount,
+        entriesCount: claimSnapshots.entriesCount,
+        tokenDecimals: claimSnapshots.tokenDecimals,
+      })
+      .from(claimSnapshots)
+      .where(eq(claimSnapshots.status, "active"))
+      .limit(1);
+
+    // Convert on-chain units to human-readable
+    const decimals = claimStats?.tokenDecimals ?? 18;
+    const divisor = 10 ** decimals;
+    const claimable = claimStats ? Math.round(Number(BigInt(claimStats.totalClaimable ?? "0")) / divisor) : 0;
+    const claimed = claimStats ? Math.round(Number(BigInt(claimStats.totalClaimed ?? "0")) / divisor) : 0;
+
     const TREASURY_SUPPLY = 240_000_000; // approximate total treasury tokens
 
     return success(res, {
@@ -116,7 +135,12 @@ router.get(
       token_vote_rewards: Math.round(Number(tokenStats.totalVoteRewards ?? 0)),
       token_total_tipped: Math.round(Number(tokenStats.totalTipped ?? 0)),
       token_holders: tokenStats.holdersCount ?? 0,
-      version: "1.3.0",
+      // On-chain claims
+      token_total_claimable: claimable,
+      token_total_claimed: claimed,
+      token_total_unclaimed: claimable - claimed,
+      token_claims_count: claimStats?.claimsCount ?? 0,
+      version: "1.4.0",
     });
   })
 );

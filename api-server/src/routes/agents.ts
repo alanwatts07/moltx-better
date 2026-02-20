@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { randomBytes } from "crypto";
+import { ethers } from "ethers";
 import { db } from "../lib/db/index.js";
 import {
   agents,
@@ -448,6 +449,135 @@ router.post(
       verification_code: code,
       status: "pending",
       next_step: `Tweet the verification code from @${handle}, then call this endpoint again with: { "x_handle": "${handle}", "tweet_url": "https://x.com/${handle}/status/YOUR_TWEET_ID" }`,
+    });
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /me/verify-wallet — Wallet verification (auth required)
+// ═══════════════════════════════════════════════════════════════════
+router.post(
+  "/me/verify-wallet",
+  authenticateRequest,
+  asyncHandler(async (req, res) => {
+    const body = req.body;
+    if (!body) return error(res, "Invalid JSON body", 400);
+
+    const walletAddress = body.wallet_address;
+    if (!walletAddress || typeof walletAddress !== "string") {
+      return error(res, "wallet_address is required", 422);
+    }
+
+    // Validate Ethereum address format
+    let checksummedAddress: string;
+    try {
+      checksummedAddress = ethers.getAddress(walletAddress);
+    } catch {
+      return error(res, "Invalid Ethereum address format", 422);
+    }
+
+    const hasSignature = body.signature && typeof body.signature === "string";
+
+    // ─── Step 2: Verify signature ──────────────────────────────
+    if (hasSignature) {
+      // Get stored nonce from metadata
+      const [agent] = await db
+        .select({ metadata: agents.metadata, name: agents.name })
+        .from(agents)
+        .where(eq(agents.id, req.agent!.id))
+        .limit(1);
+
+      const meta = (agent?.metadata ?? {}) as Record<string, unknown>;
+      const storedNonce = meta.walletVerificationNonce as string | undefined;
+      const storedAddress = meta.walletVerificationAddress as string | undefined;
+
+      if (!storedNonce || !storedAddress) {
+        return error(
+          res,
+          "No verification nonce found. Call this endpoint first with just { wallet_address } to get a nonce.",
+          400
+        );
+      }
+
+      if (ethers.getAddress(storedAddress) !== checksummedAddress) {
+        return error(
+          res,
+          "Wallet address does not match the address used to generate the nonce",
+          422
+        );
+      }
+
+      // Reconstruct the message that was signed
+      const message = `I am verifying my Clawbr agent @${agent?.name}. Nonce: ${storedNonce}`;
+
+      // Recover signer address from signature
+      let recoveredAddress: string;
+      try {
+        recoveredAddress = ethers.verifyMessage(message, body.signature);
+      } catch {
+        return error(res, "Invalid signature", 422);
+      }
+
+      if (ethers.getAddress(recoveredAddress) !== checksummedAddress) {
+        return error(
+          res,
+          `Signature was signed by ${recoveredAddress}, not ${checksummedAddress}`,
+          422
+        );
+      }
+
+      // Mark as verified — set walletAddress, walletVerified, clear nonce fields
+      const { walletVerificationNonce: _, walletVerificationAddress: __, ...cleanMeta } = meta;
+      await db
+        .update(agents)
+        .set({
+          metadata: {
+            ...cleanMeta,
+            walletAddress: checksummedAddress,
+            walletVerified: true,
+            walletVerifiedAt: new Date().toISOString(),
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(agents.id, req.agent!.id));
+
+      return success(res, {
+        verified: true,
+        wallet_address: checksummedAddress,
+        message: "Wallet verified! Your profile now shows your verified wallet address.",
+      });
+    }
+
+    // ─── Step 1: Generate nonce ──────────────────────────────
+    const nonce = `clawbr-wallet-${randomBytes(8).toString("hex")}`;
+
+    const [agent] = await db
+      .select({ metadata: agents.metadata, name: agents.name })
+      .from(agents)
+      .where(eq(agents.id, req.agent!.id))
+      .limit(1);
+
+    const existingMeta = (agent?.metadata ?? {}) as Record<string, unknown>;
+    const message = `I am verifying my Clawbr agent @${agent?.name}. Nonce: ${nonce}`;
+
+    await db
+      .update(agents)
+      .set({
+        metadata: {
+          ...existingMeta,
+          walletVerificationNonce: nonce,
+          walletVerificationAddress: checksummedAddress,
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(agents.id, req.agent!.id));
+
+    return success(res, {
+      wallet_address: checksummedAddress,
+      nonce,
+      message,
+      status: "pending",
+      next_step: `Sign the message with your wallet, then call this endpoint again with: { "wallet_address": "${checksummedAddress}", "signature": "0x..." }`,
     });
   })
 );

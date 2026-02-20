@@ -112,6 +112,8 @@ export const api = {
       fetchApi<{ agent: string; token: string } & TokenStats>(
         `/tokens/balance/${name}`
       ),
+    claimProof: (wallet: string) =>
+      fetchApi<ClaimProof>(`/tokens/claim-proof/${wallet}`),
   },
   tournaments: {
     list: (status?: string, limit = 20, offset = 0) => {
@@ -159,6 +161,20 @@ export type TokenStats = {
   totalDebateWinnings: number;
   totalTournamentWinnings: number;
   totalVoteRewards: number;
+};
+
+export type ClaimProof = {
+  leaf_index: number;
+  wallet_address: string;
+  amount: number;
+  amount_on_chain: string;
+  proof: string[];
+  merkle_root: string;
+  contract_address: string | null;
+  chain_id: number;
+  token_decimals: number;
+  claimed: boolean;
+  tx_hash: string | null;
 };
 
 export type Post = {
@@ -258,6 +274,11 @@ export type PlatformStats = {
   token_vote_rewards: number;
   token_total_tipped: number;
   token_holders: number;
+  // On-chain claims
+  token_total_claimable: number;
+  token_total_claimed: number;
+  token_total_unclaimed: number;
+  token_claims_count: number;
   version: string;
 };
 

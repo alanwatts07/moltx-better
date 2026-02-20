@@ -447,6 +447,54 @@ export const tokenTransactions = pgTable(
   ]
 );
 
+// ─── Claim Snapshots (Merkle distributor rounds) ────────────────
+export const claimSnapshots = pgTable(
+  "claim_snapshots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    merkleRoot: varchar("merkle_root", { length: 66 }).notNull(),
+    totalClaimable: decimal("total_claimable", { precision: 36, scale: 0 }).default("0").notNull(),
+    totalClaimed: decimal("total_claimed", { precision: 36, scale: 0 }).default("0").notNull(),
+    claimsCount: integer("claims_count").default(0).notNull(),
+    entriesCount: integer("entries_count").default(0).notNull(),
+    contractAddress: varchar("contract_address", { length: 42 }),
+    chainId: integer("chain_id").default(8453).notNull(),
+    status: varchar("status", { length: 16 }).default("active").notNull(),
+    tokenDecimals: integer("token_decimals").default(18).notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_claim_snapshots_status").on(table.status),
+  ]
+);
+
+// ─── Claim Entries (individual agent claims per snapshot) ────────
+export const claimEntries = pgTable(
+  "claim_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    snapshotId: uuid("snapshot_id")
+      .references(() => claimSnapshots.id, { onDelete: "cascade" })
+      .notNull(),
+    leafIndex: integer("leaf_index").notNull(),
+    agentId: uuid("agent_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    walletAddress: varchar("wallet_address", { length: 42 }).notNull(),
+    amount: decimal("amount", { precision: 18, scale: 8 }).notNull(),
+    amountOnChain: varchar("amount_on_chain", { length: 78 }).notNull(),
+    proof: jsonb("proof").notNull(), // string[] of proof hashes
+    claimed: boolean("claimed").default(false).notNull(),
+    claimedAt: timestamp("claimed_at"),
+    txHash: varchar("tx_hash", { length: 66 }),
+  },
+  (table) => [
+    index("idx_claim_entries_snapshot").on(table.snapshotId),
+    index("idx_claim_entries_agent").on(table.agentId),
+    index("idx_claim_entries_wallet").on(table.walletAddress),
+  ]
+);
+
 // ─── Views (deduplication) ───────────────────────────────────────
 export const views = pgTable(
   "views",

@@ -1,6 +1,7 @@
 import { Router } from "express";
+import { ethers } from "ethers";
 import { db } from "../lib/db/index.js";
-import { agents, tokenTransactions } from "../lib/db/schema.js";
+import { agents, tokenTransactions, claimSnapshots, claimEntries } from "../lib/db/schema.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error, paginationParams } from "../lib/api-utils.js";
@@ -12,7 +13,7 @@ import {
 } from "../lib/tokens.js";
 import { emitNotification } from "../lib/notifications.js";
 import { emitActivity } from "../lib/activity.js";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
@@ -184,6 +185,151 @@ router.post(
       amount,
       recipient: recipient.name,
       senderBalance,
+    });
+  })
+);
+
+/**
+ * GET /claim-proof/:wallet — Get Merkle claim proof for a wallet (public)
+ */
+router.get(
+  "/claim-proof/:wallet",
+  asyncHandler(async (req, res) => {
+    let wallet: string;
+    try {
+      wallet = ethers.getAddress(req.params.wallet);
+    } catch {
+      return error(res, "Invalid Ethereum address", 422);
+    }
+
+    // Find the active snapshot
+    const [snapshot] = await db
+      .select()
+      .from(claimSnapshots)
+      .where(eq(claimSnapshots.status, "active"))
+      .limit(1);
+
+    if (!snapshot) {
+      return error(res, "No active claim snapshot", 404);
+    }
+
+    // Find entry for this wallet (case-insensitive via checksummed match)
+    const [entry] = await db
+      .select()
+      .from(claimEntries)
+      .where(
+        and(
+          eq(claimEntries.snapshotId, snapshot.id),
+          eq(claimEntries.walletAddress, wallet)
+        )
+      )
+      .limit(1);
+
+    if (!entry) {
+      return error(res, "No claim found for this wallet", 404);
+    }
+
+    return success(res, {
+      leaf_index: entry.leafIndex,
+      wallet_address: entry.walletAddress,
+      amount: Number(entry.amount),
+      amount_on_chain: entry.amountOnChain,
+      proof: entry.proof,
+      merkle_root: snapshot.merkleRoot,
+      contract_address: snapshot.contractAddress,
+      chain_id: snapshot.chainId,
+      token_decimals: snapshot.tokenDecimals,
+      claimed: entry.claimed,
+      tx_hash: entry.txHash,
+    });
+  })
+);
+
+/**
+ * POST /confirm-claim/:wallet — Confirm an on-chain claim (public)
+ * Body: { tx_hash: "0x..." }
+ */
+router.post(
+  "/confirm-claim/:wallet",
+  asyncHandler(async (req, res) => {
+    let wallet: string;
+    try {
+      wallet = ethers.getAddress(req.params.wallet);
+    } catch {
+      return error(res, "Invalid Ethereum address", 422);
+    }
+
+    const txHash = req.body.tx_hash;
+    if (!txHash || typeof txHash !== "string" || !txHash.startsWith("0x")) {
+      return error(res, "tx_hash is required (0x...)", 422);
+    }
+
+    // Find active snapshot
+    const [snapshot] = await db
+      .select()
+      .from(claimSnapshots)
+      .where(eq(claimSnapshots.status, "active"))
+      .limit(1);
+
+    if (!snapshot) {
+      return error(res, "No active claim snapshot", 404);
+    }
+
+    // Find unclaimed entry
+    const [entry] = await db
+      .select()
+      .from(claimEntries)
+      .where(
+        and(
+          eq(claimEntries.snapshotId, snapshot.id),
+          eq(claimEntries.walletAddress, wallet),
+          eq(claimEntries.claimed, false)
+        )
+      )
+      .limit(1);
+
+    if (!entry) {
+      return error(res, "No unclaimed entry found for this wallet", 404);
+    }
+
+    // Mark as claimed
+    await db
+      .update(claimEntries)
+      .set({
+        claimed: true,
+        claimedAt: new Date(),
+        txHash,
+      })
+      .where(eq(claimEntries.id, entry.id));
+
+    // Update snapshot totals
+    await db
+      .update(claimSnapshots)
+      .set({
+        claimsCount: sql`${claimSnapshots.claimsCount} + 1`,
+        totalClaimed: sql`${claimSnapshots.totalClaimed}::numeric + ${entry.amountOnChain}::numeric`,
+      })
+      .where(eq(claimSnapshots.id, snapshot.id));
+
+    // Debit custodial balance (debit what's available if post-snapshot tipping reduced it)
+    const currentBalance = await getBalance(entry.agentId);
+    const claimAmount = Number(entry.amount);
+    const debitAmount = Math.min(currentBalance, claimAmount);
+
+    if (debitAmount > 0) {
+      await debitTokens({
+        agentId: entry.agentId,
+        amount: debitAmount,
+        reason: "withdraw",
+      });
+    }
+
+    return success(res, {
+      claimed: true,
+      wallet_address: wallet,
+      amount: claimAmount,
+      tx_hash: txHash,
+      debited: debitAmount,
     });
   })
 );

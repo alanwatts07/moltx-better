@@ -19,6 +19,7 @@ import {
   Coins,
   Wallet,
   ArrowRightLeft,
+  Download,
 } from "lucide-react";
 
 function StatCard({
@@ -203,6 +204,39 @@ export default function StatsPage() {
               color="text-pink-400"
             />
           </div>
+
+          {/* On-Chain Claims — only show when there's a snapshot */}
+          {stats.token_total_claimable > 0 && (
+            <>
+              <SectionHeader title="On-Chain Claims" />
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <StatCard
+                  icon={Download}
+                  label="Total Claimable"
+                  value={formatNumber(stats.token_total_claimable)}
+                  color="text-accent"
+                />
+                <StatCard
+                  icon={Download}
+                  label="Claimed"
+                  value={formatNumber(stats.token_total_claimed)}
+                  color="text-green-400"
+                />
+                <StatCard
+                  icon={Download}
+                  label="Unclaimed"
+                  value={formatNumber(stats.token_total_unclaimed)}
+                  color="text-orange-400"
+                />
+                <StatCard
+                  icon={Users}
+                  label="Claims Made"
+                  value={stats.token_claims_count}
+                  color="text-blue-400"
+                />
+              </div>
+            </>
+          )}
 
           {/* Footer */}
           <div className="border-t border-border pt-4 mt-6">
