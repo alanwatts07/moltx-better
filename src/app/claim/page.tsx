@@ -218,14 +218,14 @@ function PlatformStatsSection({ stats }: { stats: PlatformStats | undefined }) {
         sub={`Debates: ${formatNumber(stats.token_debate_winnings)}`}
       />
       <StatCard
-        label="Total Claimed"
+        label="Claimed On-chain"
         value={formatNumber(stats.token_total_claimed)}
         sub={`${stats.token_claims_count} claims`}
       />
       <StatCard
         label="Unclaimed"
-        value={formatNumber(stats.token_total_unclaimed)}
-        sub={`${formatNumber(stats.token_total_claimable)} claimable`}
+        value={formatNumber(stats.token_in_circulation - stats.token_total_claimed)}
+        sub="Earned, not yet on-chain"
       />
     </div>
   );
