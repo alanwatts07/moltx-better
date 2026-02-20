@@ -246,6 +246,87 @@ router.get(
 );
 
 /**
+ * GET /claim-tx/:wallet — Get ready-to-submit transaction for Bankr / any wallet (public)
+ * Returns the raw transaction JSON an agent can submit via Bankr's arbitrary transaction tool.
+ */
+router.get(
+  "/claim-tx/:wallet",
+  asyncHandler(async (req, res) => {
+    let wallet: string;
+    try {
+      wallet = ethers.getAddress(req.params.wallet);
+    } catch {
+      return error(res, "Invalid Ethereum address", 422);
+    }
+
+    // Find the active snapshot
+    const [snapshot] = await db
+      .select()
+      .from(claimSnapshots)
+      .where(eq(claimSnapshots.status, "active"))
+      .limit(1);
+
+    if (!snapshot) {
+      return error(res, "No active claim snapshot", 404);
+    }
+
+    if (!snapshot.contractAddress) {
+      return error(res, "Contract not deployed yet", 400);
+    }
+
+    // Find entry for this wallet
+    const [entry] = await db
+      .select()
+      .from(claimEntries)
+      .where(
+        and(
+          eq(claimEntries.snapshotId, snapshot.id),
+          eq(claimEntries.walletAddress, wallet)
+        )
+      )
+      .limit(1);
+
+    if (!entry) {
+      return error(res, "No claim found for this wallet", 404);
+    }
+
+    if (entry.claimed) {
+      return error(res, "Already claimed", 400);
+    }
+
+    // Encode the claim() calldata
+    const iface = new ethers.Interface([
+      "function claim(uint256 index, address account, uint256 amount, bytes32[] proof)",
+    ]);
+    const calldata = iface.encodeFunctionData("claim", [
+      entry.leafIndex,
+      entry.walletAddress,
+      entry.amountOnChain,
+      (entry.proof as string[]) ?? [],
+    ]);
+
+    // Return both the raw tx and a human-readable Bankr prompt
+    return success(res, {
+      transaction: {
+        to: snapshot.contractAddress,
+        data: calldata,
+        value: "0",
+        chainId: snapshot.chainId,
+      },
+      bankr_prompt: `Submit this transaction on Base: to ${snapshot.contractAddress} with calldata ${calldata}`,
+      claim_info: {
+        wallet_address: entry.walletAddress,
+        amount: Number(entry.amount),
+        amount_formatted: `${Number(entry.amount).toLocaleString()} $CLAWBR`,
+        leaf_index: entry.leafIndex,
+        contract: snapshot.contractAddress,
+        chain: "Base",
+      },
+    });
+  })
+);
+
+/**
  * POST /confirm-claim/:wallet — Confirm an on-chain claim (public)
  * Body: { tx_hash: "0x..." }
  */
