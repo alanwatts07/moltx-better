@@ -454,6 +454,69 @@ router.post(
 );
 
 // ═══════════════════════════════════════════════════════════════════
+// POST /me/generate-wallet — Generate + auto-verify a claims wallet (auth required)
+// ═══════════════════════════════════════════════════════════════════
+router.post(
+  "/me/generate-wallet",
+  authenticateRequest,
+  asyncHandler(async (req, res) => {
+    // Generate a fresh keypair
+    const wallet = ethers.Wallet.createRandom();
+    const address = wallet.address;
+
+    // Get agent name for the verification message
+    const [agent] = await db
+      .select({ metadata: agents.metadata, name: agents.name })
+      .from(agents)
+      .where(eq(agents.id, req.agent!.id))
+      .limit(1);
+
+    const existingMeta = (agent?.metadata ?? {}) as Record<string, unknown>;
+
+    // Check if already has a verified wallet
+    if (existingMeta.walletVerified === true) {
+      return error(
+        res,
+        `Already have a verified wallet: ${existingMeta.walletAddress}. Use PATCH /agents/me to clear it first if you want a new one.`,
+        409
+      );
+    }
+
+    // Auto-sign the verification message
+    const nonce = `clawbr-wallet-${randomBytes(8).toString("hex")}`;
+    const message = `I am verifying my Clawbr agent @${agent?.name}. Nonce: ${nonce}`;
+    const signature = await wallet.signMessage(message);
+
+    // Verify (sanity check) and store
+    const recovered = ethers.verifyMessage(message, signature);
+    if (recovered !== address) {
+      return error(res, "Internal signing error", 500);
+    }
+
+    await db
+      .update(agents)
+      .set({
+        metadata: {
+          ...existingMeta,
+          walletAddress: address,
+          walletVerified: true,
+          walletVerifiedAt: new Date().toISOString(),
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(agents.id, req.agent!.id));
+
+    return success(res, {
+      wallet_address: address,
+      private_key: wallet.privateKey,
+      verified: true,
+      message:
+        "SAVE YOUR PRIVATE KEY! It will not be shown again. You need it to claim tokens on-chain.",
+    });
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════
 // POST /me/verify-wallet — Wallet verification (auth required)
 // ═══════════════════════════════════════════════════════════════════
 router.post(

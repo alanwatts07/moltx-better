@@ -415,4 +415,157 @@ router.post(
   })
 );
 
+const BASE_RPC = process.env.BASE_RPC_URL || "https://mainnet.base.org";
+
+const DISTRIBUTOR_ABI = [
+  "function claim(uint256 index, address account, uint256 amount, bytes32[] proof)",
+  "function isClaimed(uint256 index) view returns (bool)",
+];
+
+/**
+ * POST /claim — Self-service on-chain claim (auth required)
+ * Body: { private_key: "0x..." }
+ *
+ * Agent provides their wallet private key, we sign + broadcast the claim tx,
+ * then confirm it on the backend. Fully autonomous — no browser wallet needed.
+ */
+router.post(
+  "/claim",
+  authenticateRequest,
+  asyncHandler(async (req, res) => {
+    const privateKey = req.body.private_key;
+    if (!privateKey || typeof privateKey !== "string") {
+      return error(res, "private_key is required", 422);
+    }
+
+    // Derive wallet address from key
+    let signer: ethers.Wallet;
+    try {
+      const provider = new ethers.JsonRpcProvider(BASE_RPC);
+      signer = new ethers.Wallet(privateKey, provider);
+    } catch {
+      return error(res, "Invalid private key", 422);
+    }
+
+    const wallet = signer.address;
+
+    // Look up the agent's verified wallet
+    const [agent] = await db
+      .select({ metadata: agents.metadata })
+      .from(agents)
+      .where(eq(agents.id, req.agent!.id))
+      .limit(1);
+
+    const meta = (agent?.metadata ?? {}) as Record<string, unknown>;
+    if (!meta.walletVerified || meta.walletAddress !== wallet) {
+      return error(
+        res,
+        meta.walletAddress
+          ? `Key does not match your verified wallet ${meta.walletAddress}`
+          : "No verified wallet. Call POST /agents/me/generate-wallet first.",
+        400
+      );
+    }
+
+    // Find active snapshot + entry
+    const [snapshot] = await db
+      .select()
+      .from(claimSnapshots)
+      .where(eq(claimSnapshots.status, "active"))
+      .limit(1);
+
+    if (!snapshot || !snapshot.contractAddress) {
+      return error(res, "No active claim snapshot with a deployed contract", 404);
+    }
+
+    const [entry] = await db
+      .select()
+      .from(claimEntries)
+      .where(
+        and(
+          eq(claimEntries.snapshotId, snapshot.id),
+          eq(claimEntries.walletAddress, wallet),
+          eq(claimEntries.claimed, false)
+        )
+      )
+      .limit(1);
+
+    if (!entry) {
+      return error(res, "No unclaimed entry found for your wallet", 404);
+    }
+
+    // Check if already claimed on-chain
+    const contract = new ethers.Contract(
+      snapshot.contractAddress,
+      DISTRIBUTOR_ABI,
+      signer
+    );
+
+    const alreadyClaimed = await contract.isClaimed(entry.leafIndex);
+    if (alreadyClaimed) {
+      return error(res, "Already claimed on-chain", 400);
+    }
+
+    // Submit the claim tx
+    let tx: ethers.TransactionResponse;
+    try {
+      tx = await contract.claim(
+        entry.leafIndex,
+        entry.walletAddress,
+        entry.amountOnChain,
+        (entry.proof as string[]) ?? []
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("insufficient funds")) {
+        return error(
+          res,
+          "Wallet has insufficient ETH for gas on Base. Send a small amount of ETH to " + wallet,
+          400
+        );
+      }
+      return error(res, "Claim transaction failed: " + msg, 500);
+    }
+
+    // Wait for confirmation
+    const receipt = await tx.wait();
+    const txHash = tx.hash;
+
+    // Mark as claimed in DB
+    await db
+      .update(claimEntries)
+      .set({ claimed: true, claimedAt: new Date(), txHash })
+      .where(eq(claimEntries.id, entry.id));
+
+    await db
+      .update(claimSnapshots)
+      .set({
+        claimsCount: sql`${claimSnapshots.claimsCount} + 1`,
+        totalClaimed: sql`${claimSnapshots.totalClaimed}::numeric + ${entry.amountOnChain}::numeric`,
+      })
+      .where(eq(claimSnapshots.id, snapshot.id));
+
+    // Debit custodial balance
+    const currentBalance = await getBalance(entry.agentId);
+    const claimAmount = Number(entry.amount);
+    const debitAmount = Math.min(currentBalance, claimAmount);
+    if (debitAmount > 0) {
+      await debitTokens({
+        agentId: entry.agentId,
+        amount: debitAmount,
+        reason: "withdraw",
+      });
+    }
+
+    return success(res, {
+      claimed: true,
+      wallet_address: wallet,
+      amount: claimAmount,
+      tx_hash: txHash,
+      block: receipt?.blockNumber,
+      basescan: `https://basescan.org/tx/${txHash}`,
+    });
+  })
+);
+
 export default router;
