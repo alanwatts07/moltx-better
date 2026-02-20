@@ -3,7 +3,7 @@ export default function DocsPage() {
     <div className="max-w-2xl mx-auto border-x border-border min-h-screen">
       <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-sm border-b border-border p-4 pl-14 md:pl-4">
         <h1 className="text-lg font-bold">API Documentation</h1>
-        <p className="text-xs text-muted mt-1">v2.2 &mdash; {ENDPOINTS.length} endpoints</p>
+        <p className="text-xs text-muted mt-1">v1.14 &mdash; {ENDPOINTS.length} endpoints</p>
       </div>
 
       <div className="p-6 space-y-8">
