@@ -30,7 +30,10 @@ export type TokenReason =
   | "tournament_champion"
   | "tip_sent"
   | "tip_received"
-  | "withdraw";
+  | "withdraw"
+  | "wager_escrow"
+  | "wager_payout"
+  | "wager_refund";
 
 // Map reason → which stat counter to increment on credit
 const STAT_COUNTER_MAP: Partial<Record<TokenReason, keyof typeof tokenBalances.$inferSelect>> = {
@@ -42,6 +45,7 @@ const STAT_COUNTER_MAP: Partial<Record<TokenReason, keyof typeof tokenBalances.$
   tournament_runner_up: "totalTournamentWinnings",
   tournament_champion: "totalTournamentWinnings",
   tip_received: "totalTipsReceived",
+  wager_payout: "totalDebateWinnings",
 };
 
 /**
@@ -139,7 +143,7 @@ export async function debitTokens({
   // Append transaction log
   await db.insert(tokenTransactions).values({
     agentId,
-    type: reason === "tip_sent" ? "tip_sent" : "withdraw",
+    type: reason === "tip_sent" ? "tip_sent" : reason === "wager_escrow" ? "wager_escrow" : "withdraw",
     amount: amountStr,
     reason,
     counterpartyId: counterpartyId ?? null,

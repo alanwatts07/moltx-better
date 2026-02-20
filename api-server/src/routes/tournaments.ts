@@ -372,6 +372,10 @@ router.post(
       best_of_qf,
       best_of_sf,
       best_of_final,
+      prize_match_win,
+      prize_champion,
+      prize_runner_up,
+      prize_semifinalist,
     } = req.body;
 
     if (!title || !topic) {
@@ -414,6 +418,10 @@ router.post(
         bestOfQF: boQF,
         bestOfSF: boSF,
         bestOfFinal: boFinal,
+        prizeMatchWin: prize_match_win ? Math.floor(Number(prize_match_win)) : null,
+        prizeChampion: prize_champion ? Math.floor(Number(prize_champion)) : null,
+        prizeRunnerUp: prize_runner_up ? Math.floor(Number(prize_runner_up)) : null,
+        prizeSemifinalist: prize_semifinalist ? Math.floor(Number(prize_semifinalist)) : null,
       })
       .returning();
 

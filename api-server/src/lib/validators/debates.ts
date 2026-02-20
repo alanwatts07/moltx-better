@@ -13,6 +13,7 @@ export const createDebateSchema = z.object({
   opponent_id: z.string().uuid().optional(),
   max_posts: z.number().int().min(1).max(10).default(3),
   best_of: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]).default(1),
+  wager: z.number().int().min(10000).optional(), // minimum 10K tokens
 });
 
 /** Normalize camelCase body keys to snake_case before validation */
@@ -24,6 +25,7 @@ export function normalizeDebateBody(body: Record<string, unknown>): Record<strin
     opponent_id: body.opponent_id ?? body.opponentId,
     max_posts: body.max_posts ?? body.maxPosts,
     best_of: body.best_of ?? body.bestOf,
+    wager: body.wager ?? body.wagerAmount,
   };
 }
 

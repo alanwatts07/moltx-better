@@ -220,7 +220,7 @@ async function concludeMatch(
     .where(eq(tournamentMatches.id, match.id));
 
   // Apply tournament-specific scoring (per series, not per game)
-  await applyTournamentScoring(match.round, winnerId, loserId, isForfeit, match.bestOf ?? 1);
+  await applyTournamentScoring(tournament, match.round, winnerId, loserId, isForfeit, match.bestOf ?? 1);
 
   // Eliminate loser
   if (loserId) {
@@ -470,6 +470,7 @@ export async function advanceTournamentBracket(
 }
 
 async function applyTournamentScoring(
+  tournament: typeof tournaments.$inferSelect,
   round: number,
   winnerId: string,
   loserId: string | null,
@@ -538,11 +539,13 @@ async function applyTournamentScoring(
     })
     .where(eq(debateStats.agentId, winnerId));
 
-  // $CLAWBR reward for tournament match win
+  // $CLAWBR reward for tournament match win (per-tournament override or global default)
+  const matchWinPrize = tournament.prizeMatchWin ?? TOKEN_REWARDS.TOURNAMENT_MATCH_WIN;
   creditTokens({
     agentId: winnerId,
-    amount: TOKEN_REWARDS.TOURNAMENT_MATCH_WIN,
+    amount: matchWinPrize,
     reason: "tournament_match_win",
+    referenceId: tournament.id,
   }).catch((err) => console.error("[token-reward] Tournament match win:", err));
 
   // Loser: normal ELO loss to base score + playoff record (tournament bonus untouched)
@@ -612,10 +615,11 @@ async function completeTournament(
     })
     .where(eq(debateStats.agentId, championId));
 
-  // $CLAWBR champion reward (scales by tournament size)
-  const championReward = (tournament.size ?? 8) >= 9
-    ? TOKEN_REWARDS.TOURNAMENT_CHAMPION_16P
-    : TOKEN_REWARDS.TOURNAMENT_CHAMPION_8P;
+  // $CLAWBR champion reward (per-tournament override, or scales by size)
+  const championReward = tournament.prizeChampion
+    ?? ((tournament.size ?? 8) >= 9
+      ? TOKEN_REWARDS.TOURNAMENT_CHAMPION_16P
+      : TOKEN_REWARDS.TOURNAMENT_CHAMPION_8P);
   creditTokens({
     agentId: championId,
     amount: championReward,
@@ -656,18 +660,18 @@ async function completeTournament(
         .where(eq(debateStats.agentId, p.agentId));
     }
 
-    // $CLAWBR placement rewards
+    // $CLAWBR placement rewards (per-tournament override or global default)
     if (placement === 2) {
       creditTokens({
         agentId: p.agentId,
-        amount: TOKEN_REWARDS.TOURNAMENT_RUNNER_UP,
+        amount: tournament.prizeRunnerUp ?? TOKEN_REWARDS.TOURNAMENT_RUNNER_UP,
         reason: "tournament_runner_up",
         referenceId: tournament.id,
       }).catch((err) => console.error("[token-reward] Runner-up:", err));
     } else if (placement <= 4) {
       creditTokens({
         agentId: p.agentId,
-        amount: TOKEN_REWARDS.TOURNAMENT_SEMIFINALIST,
+        amount: tournament.prizeSemifinalist ?? TOKEN_REWARDS.TOURNAMENT_SEMIFINALIST,
         reason: "tournament_semifinalist",
         referenceId: tournament.id,
       }).catch((err) => console.error("[token-reward] Semifinalist:", err));

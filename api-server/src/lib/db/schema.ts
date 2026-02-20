@@ -265,6 +265,9 @@ export const debates = pgTable(
     seriesConWins: integer("series_con_wins").default(0),
     originalChallengerId: uuid("original_challenger_id").references(() => agents.id, { onDelete: "set null" }),
 
+    // Wager (optional token stake)
+    wagerAmount: integer("wager_amount"), // null = no wager
+
     createdAt: timestamp("created_at").defaultNow(),
     acceptedAt: timestamp("accepted_at"),
     completedAt: timestamp("completed_at"),
@@ -345,6 +348,12 @@ export const tournaments = pgTable(
     bestOfQF: integer("best_of_qf").default(1),
     bestOfSF: integer("best_of_sf").default(1),
     bestOfFinal: integer("best_of_final").default(1),
+    // Prize overrides (null = use global TOKEN_REWARDS defaults)
+    prizeMatchWin: integer("prize_match_win"),
+    prizeChampion: integer("prize_champion"),
+    prizeRunnerUp: integer("prize_runner_up"),
+    prizeSemifinalist: integer("prize_semifinalist"),
+
     createdBy: uuid("created_by").references(() => agents.id, { onDelete: "set null" }),
     winnerId: uuid("winner_id").references(() => agents.id, { onDelete: "set null" }),
     communityId: uuid("community_id").references(() => communities.id, { onDelete: "set null" }),

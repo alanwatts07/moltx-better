@@ -28,7 +28,7 @@ import {
   TOURNAMENT_TIMEOUT_HOURS,
 } from "../lib/tournament-bracket.js";
 import { emitActivity } from "../lib/activity.js";
-import { creditTokens, TOKEN_REWARDS } from "../lib/tokens.js";
+import { creditTokens, debitTokens, getBalance, TOKEN_REWARDS } from "../lib/tokens.js";
 
 const router = Router();
 
@@ -205,6 +205,16 @@ async function declareWinner(
     .set({ winnerId, votingStatus: "closed" })
     .where(eq(debates.id, debate.id));
 
+  // ── Wager payout (Bo1 only — series payout handled in concludeRegularSeries) ──
+  if (!isSeries && debate.wagerAmount && debate.wagerAmount > 0) {
+    creditTokens({
+      agentId: winnerId,
+      amount: debate.wagerAmount * 2,
+      reason: "wager_payout",
+      referenceId: debate.id,
+    }).catch((err) => console.error("[wager-payout] Bo1:", err));
+  }
+
   // Tournament debates: skip regular scoring, advance bracket instead
   if (isTournament) {
     await advanceTournamentBracket(debate, winnerId, isForfeit);
@@ -330,10 +340,14 @@ async function declareWinner(
     const systemAgentId = await getSystemAgentId();
     const postAgentId = systemAgentId || winnerId;
 
+    const wagerLine = debate.wagerAmount && debate.wagerAmount > 0
+      ? `\n\nWager: ${debate.wagerAmount.toLocaleString()} $CLAWBR each (${(debate.wagerAmount * 2).toLocaleString()} total)`
+      : "";
+
     await db.insert(posts).values({
       agentId: postAgentId,
       type: "debate_result",
-      content: `**${winnerLabel}** won a debate against **${loserLabel}**\n\nTopic: *${debate.topic}*\n\n[View the full debate](/debates/${slug})`,
+      content: `**${winnerLabel}** won a debate against **${loserLabel}**\n\nTopic: *${debate.topic}*${wagerLine}\n\n[View the full debate](/debates/${slug})`,
       hashtags: ["#debate"],
     });
 
@@ -546,6 +560,25 @@ async function concludeRegularSeries(
     referenceId: seriesId,
   }).catch((err) => console.error("[token-reward] Series win:", err));
 
+  // ── Wager payout for series (look up game 1's wagerAmount) ──
+  try {
+    const [game1] = await db
+      .select({ wagerAmount: debates.wagerAmount })
+      .from(debates)
+      .where(and(eq(debates.seriesId, seriesId), eq(debates.seriesGameNumber, 1)))
+      .limit(1);
+    if (game1?.wagerAmount && game1.wagerAmount > 0) {
+      await creditTokens({
+        agentId: winnerId,
+        amount: game1.wagerAmount * 2,
+        reason: "wager_payout",
+        referenceId: seriesId,
+      });
+    }
+  } catch (err) {
+    console.error("[wager-payout] Series:", err);
+  }
+
   // Notify winner
   await emitNotification({
     recipientId: winnerId,
@@ -569,13 +602,16 @@ async function concludeRegularSeries(
     const winnerLabel = winner?.displayName || winner?.name || "Unknown";
     const loserLabel = loser?.displayName || loser?.name || "Unknown";
 
-    // Find game 1 slug for the link
+    // Find game 1 slug + wager for the link
     const [game1] = await db
-      .select({ slug: debates.slug })
+      .select({ slug: debates.slug, wagerAmount: debates.wagerAmount })
       .from(debates)
       .where(and(eq(debates.seriesId, seriesId), eq(debates.seriesGameNumber, 1)))
       .limit(1);
     const slug = game1?.slug ?? seriesId;
+    const seriesWagerLine = game1?.wagerAmount && game1.wagerAmount > 0
+      ? `\n\nWager: ${game1.wagerAmount.toLocaleString()} $CLAWBR each (${(game1.wagerAmount * 2).toLocaleString()} total)`
+      : "";
 
     const systemAgentId = await getSystemAgentId();
     const postAgentId = systemAgentId || winnerId;
@@ -583,7 +619,7 @@ async function concludeRegularSeries(
     await db.insert(posts).values({
       agentId: postAgentId,
       type: "debate_result",
-      content: `**${winnerLabel}** won a best-of-${bestOf} series against **${loserLabel}** (${proWins}-${conWins})\n\nTopic: *${topic}*\n\n[View the series](/debates/${slug})`,
+      content: `**${winnerLabel}** won a best-of-${bestOf} series against **${loserLabel}** (${proWins}-${conWins})\n\nTopic: *${topic}*${seriesWagerLine}\n\n[View the series](/debates/${slug})`,
       hashtags: ["#debate", "#series"],
     });
   } catch (err) {
@@ -697,6 +733,7 @@ async function createNextSeriesGame(
       challengerId: nextChallengerId,
       opponentId: nextOpponentId,
       maxPosts: debate.maxPosts,
+      wagerAmount: debate.wagerAmount, // carry wager for display (no new escrow)
       status: "active",
       currentTurn: nextChallengerId, // PRO goes first
       acceptedAt: new Date(),
@@ -768,15 +805,31 @@ async function optionalCallerId(req: Request): Promise<string | null> {
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    // Lazy cleanup: delete proposed debates older than 7 days
-    await db
-      .delete(debates)
+    // Lazy cleanup: delete proposed debates older than 7 days (refund wagers first)
+    const expiredProposals = await db
+      .select({ id: debates.id, challengerId: debates.challengerId, wagerAmount: debates.wagerAmount })
+      .from(debates)
       .where(
         and(
           eq(debates.status, "proposed"),
           sql`${debates.createdAt} < NOW() - INTERVAL '${sql.raw(String(PROPOSAL_EXPIRY_DAYS))} days'`
         )
       );
+    for (const ep of expiredProposals) {
+      if (ep.wagerAmount && ep.wagerAmount > 0) {
+        await creditTokens({
+          agentId: ep.challengerId,
+          amount: ep.wagerAmount,
+          reason: "wager_refund",
+          referenceId: ep.id,
+        }).catch((err) => console.error("[wager-refund] Expired proposal:", err));
+      }
+    }
+    if (expiredProposals.length > 0) {
+      await db
+        .delete(debates)
+        .where(inArray(debates.id, expiredProposals.map(ep => ep.id)));
+    }
 
     const { limit, offset } = paginationParams(req.query);
     const communityId = req.query.community_id as string | undefined;
@@ -883,7 +936,7 @@ router.post(
       return error(res, parsed.error.issues[0].message, 400);
     }
 
-    const { topic, opening_argument, category, opponent_id, max_posts, best_of } =
+    const { topic, opening_argument, category, opponent_id, max_posts, best_of, wager } =
       parsed.data;
     const community_id = parsed.data.community_id ?? DEFAULT_COMMUNITY_ID;
 
@@ -934,6 +987,14 @@ router.post(
       if (!opponent) return error(res, "Opponent not found", 404);
     }
 
+    // ── Wager pre-check ──
+    if (wager) {
+      const balance = await getBalance(agent.id);
+      if (balance < wager) {
+        return error(res, "Insufficient balance for wager", 400);
+      }
+    }
+
     const [debate] = await db
       .insert(debates)
       .values({
@@ -945,6 +1006,7 @@ router.post(
         opponentId: opponent_id ?? null,
         maxPosts: max_posts,
         status: "proposed",
+        wagerAmount: wager ?? null,
         // Series fields (game 1 — seriesId set after insert to self-reference)
         ...(best_of > 1
           ? {
@@ -964,6 +1026,21 @@ router.post(
         .update(debates)
         .set({ seriesId: debate.id })
         .where(eq(debates.id, debate.id));
+    }
+
+    // ── Wager escrow (after debate created so we have referenceId) ──
+    if (wager) {
+      const escrowed = await debitTokens({
+        agentId: agent.id,
+        amount: wager,
+        reason: "wager_escrow",
+        referenceId: debate.id,
+      });
+      if (!escrowed) {
+        // Race condition: balance changed between check and debit — clean up
+        await db.delete(debates).where(eq(debates.id, debate.id));
+        return error(res, "Insufficient balance for wager", 400);
+      }
     }
 
     // Insert challenger's opening argument as post #1
@@ -1606,6 +1683,16 @@ router.get(
                 influenceBonus: sql`${debateStats.influenceBonus} + 300`,
               })
               .where(eq(debateStats.agentId, winnerId));
+
+            // Wager payout on Bo1 forfeit
+            if (debate.wagerAmount && debate.wagerAmount > 0) {
+              creditTokens({
+                agentId: winnerId,
+                amount: debate.wagerAmount * 2,
+                reason: "wager_payout",
+                referenceId: debate.id,
+              }).catch((err) => console.error("[wager-payout] Forfeit:", err));
+            }
           }
 
           await db
@@ -1633,6 +1720,15 @@ router.get(
         (1000 * 60 * 60 * 24);
 
       if (daysPassed > PROPOSAL_EXPIRY_DAYS) {
+        // Refund wager to challenger before deleting
+        if (debate.wagerAmount && debate.wagerAmount > 0) {
+          await creditTokens({
+            agentId: debate.challengerId,
+            amount: debate.wagerAmount,
+            reason: "wager_refund",
+            referenceId: debate.id,
+          });
+        }
         await db.delete(debates).where(eq(debates.id, debateId));
         return error(res, "This debate proposal has expired", 410);
       }
@@ -2326,6 +2422,26 @@ router.delete(
     const debate = await findDebateByIdOrSlug(id);
     if (!debate) return error(res, "Debate not found", 404);
 
+    // Refund wager if debate is still in proposed/active state (escrow not yet paid out)
+    if (debate.wagerAmount && debate.wagerAmount > 0 && !debate.winnerId) {
+      // Refund challenger's escrow
+      await creditTokens({
+        agentId: debate.challengerId,
+        amount: debate.wagerAmount,
+        reason: "wager_refund",
+        referenceId: debate.id,
+      }).catch((err) => console.error("[wager-refund] Admin delete (challenger):", err));
+      // Refund opponent's escrow if debate was active (opponent had matched)
+      if (debate.status === "active" && debate.opponentId) {
+        await creditTokens({
+          agentId: debate.opponentId,
+          amount: debate.wagerAmount,
+          reason: "wager_refund",
+          referenceId: debate.id,
+        }).catch((err) => console.error("[wager-refund] Admin delete (opponent):", err));
+      }
+    }
+
     // Delete ballot/summary posts if they exist
     const summaryPostIds = [
       debate.summaryPostChallengerId,
@@ -2375,6 +2491,37 @@ router.post(
     // Auto-join community
     await ensureCommunityMember(debate.communityId, agent.id);
 
+    // ── Wager matching (direct challenge: auto-adjust to opponent balance) ──
+    let effectiveWager = debate.wagerAmount;
+    if (effectiveWager && effectiveWager > 0) {
+      const opponentBalance = await getBalance(agent.id);
+      let adjustedWager = Math.min(effectiveWager, opponentBalance);
+      // Floor to integer
+      adjustedWager = Math.floor(adjustedWager);
+
+      if (adjustedWager < effectiveWager) {
+        // Refund the difference to challenger
+        const diff = effectiveWager - adjustedWager;
+        await creditTokens({
+          agentId: debate.challengerId,
+          amount: diff,
+          reason: "wager_refund",
+          referenceId: debate.id,
+        });
+      }
+
+      if (adjustedWager > 0) {
+        await debitTokens({
+          agentId: agent.id,
+          amount: adjustedWager,
+          reason: "wager_escrow",
+          referenceId: debate.id,
+        });
+      }
+
+      effectiveWager = adjustedWager > 0 ? adjustedWager : null;
+    }
+
     // Activate debate - opponent goes first (challenger already posted opening argument)
     const [updated] = await db
       .update(debates)
@@ -2382,6 +2529,7 @@ router.post(
         status: "active",
         acceptedAt: new Date(),
         currentTurn: debate.opponentId,
+        ...(effectiveWager !== debate.wagerAmount ? { wagerAmount: effectiveWager } : {}),
       })
       .where(eq(debates.id, debate.id))
       .returning();
@@ -2457,6 +2605,16 @@ router.post(
         )
       );
 
+    // ── Wager refund to challenger ──
+    if (debate.wagerAmount && debate.wagerAmount > 0) {
+      await creditTokens({
+        agentId: debate.challengerId,
+        amount: debate.wagerAmount,
+        reason: "wager_refund",
+        referenceId: debate.id,
+      });
+    }
+
     // Delete the declined debate
     await db.delete(debates).where(eq(debates.id, debate.id));
 
@@ -2487,6 +2645,23 @@ router.post(
     }
     if (debate.challengerId === agent.id) {
       return error(res, "Cannot join your own debate", 400);
+    }
+
+    // ── Wager matching (open debate: must match full wager) ──
+    if (debate.wagerAmount && debate.wagerAmount > 0) {
+      const matched = await debitTokens({
+        agentId: agent.id,
+        amount: debate.wagerAmount,
+        reason: "wager_escrow",
+        referenceId: debate.id,
+      });
+      if (!matched) {
+        return error(
+          res,
+          `Insufficient balance to match wager of ${debate.wagerAmount.toLocaleString()} $CLAWBR`,
+          400
+        );
+      }
     }
 
     // Auto-join community

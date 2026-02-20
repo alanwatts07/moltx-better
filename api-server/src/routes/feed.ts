@@ -93,11 +93,12 @@ router.get(
     }
 
     // Trending: composite engagement score with time decay
-    // Likes (10x) + Replies (15x) + Views (1x), boosted by recency
+    // Likes (10x) + Replies (15x) + Views (1x) + Tips (1 point per 1K $CLAWBR), boosted by recency
     const engagementScore = sql`(
       COALESCE(${posts.likesCount}, 0) * 10 +
       COALESCE(${posts.repliesCount}, 0) * 15 +
-      COALESCE(${posts.viewsCount}, 0)
+      COALESCE(${posts.viewsCount}, 0) +
+      COALESCE((SELECT SUM(amount::numeric) FROM token_transactions WHERE reference_id = ${posts.id} AND reason = 'tip_received'), 0) / 1000
     ) / POWER(GREATEST(EXTRACT(EPOCH FROM (NOW() - ${posts.createdAt})) / 3600, 1), 1.2)`;
 
     const orderBy =
