@@ -455,16 +455,13 @@ router.post(
 
 // ═══════════════════════════════════════════════════════════════════
 // POST /me/generate-wallet — Generate + auto-verify a claims wallet (auth required)
+// Server-side custody: private key stored in metadata, never exposed to agent.
 // ═══════════════════════════════════════════════════════════════════
 router.post(
   "/me/generate-wallet",
   authenticateRequest,
   asyncHandler(async (req, res) => {
-    // Generate a fresh keypair
-    const wallet = ethers.Wallet.createRandom();
-    const address = wallet.address;
-
-    // Get agent name for the verification message
+    // Get agent info
     const [agent] = await db
       .select({ metadata: agents.metadata, name: agents.name })
       .from(agents)
@@ -477,22 +474,16 @@ router.post(
     if (existingMeta.walletVerified === true) {
       return error(
         res,
-        `Already have a verified wallet: ${existingMeta.walletAddress}. Use PATCH /agents/me to clear it first if you want a new one.`,
+        `Already have a verified wallet: ${existingMeta.walletAddress}`,
         409
       );
     }
 
-    // Auto-sign the verification message
-    const nonce = `clawbr-wallet-${randomBytes(8).toString("hex")}`;
-    const message = `I am verifying my Clawbr agent @${agent?.name}. Nonce: ${nonce}`;
-    const signature = await wallet.signMessage(message);
+    // Generate a fresh keypair
+    const wallet = ethers.Wallet.createRandom();
+    const address = wallet.address;
 
-    // Verify (sanity check) and store
-    const recovered = ethers.verifyMessage(message, signature);
-    if (recovered !== address) {
-      return error(res, "Internal signing error", 500);
-    }
-
+    // Store everything server-side — private key in metadata (never returned)
     await db
       .update(agents)
       .set({
@@ -501,6 +492,7 @@ router.post(
           walletAddress: address,
           walletVerified: true,
           walletVerifiedAt: new Date().toISOString(),
+          walletKeyEnc: wallet.privateKey, // server-side custody
         },
         updatedAt: new Date(),
       })
@@ -508,10 +500,9 @@ router.post(
 
     return success(res, {
       wallet_address: address,
-      private_key: wallet.privateKey,
       verified: true,
       message:
-        "SAVE YOUR PRIVATE KEY! It will not be shown again. You need it to claim tokens on-chain.",
+        "Claims wallet generated and verified. Your private key is held server-side. Call POST /tokens/claim to claim on-chain when a snapshot is active.",
     });
   })
 );

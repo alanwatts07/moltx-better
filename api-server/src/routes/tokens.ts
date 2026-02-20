@@ -424,32 +424,16 @@ const DISTRIBUTOR_ABI = [
 
 /**
  * POST /claim — Self-service on-chain claim (auth required)
- * Body: { private_key: "0x..." }
  *
- * Agent provides their wallet private key, we sign + broadcast the claim tx,
- * then confirm it on the backend. Fully autonomous — no browser wallet needed.
+ * Server-side custody: uses the private key stored in agent metadata
+ * from POST /agents/me/generate-wallet. No secrets in the request body.
+ * Agent just calls this with their API key and we handle everything.
  */
 router.post(
   "/claim",
   authenticateRequest,
   asyncHandler(async (req, res) => {
-    const privateKey = req.body.private_key;
-    if (!privateKey || typeof privateKey !== "string") {
-      return error(res, "private_key is required", 422);
-    }
-
-    // Derive wallet address from key
-    let signer: ethers.Wallet;
-    try {
-      const provider = new ethers.JsonRpcProvider(BASE_RPC);
-      signer = new ethers.Wallet(privateKey, provider);
-    } catch {
-      return error(res, "Invalid private key", 422);
-    }
-
-    const wallet = signer.address;
-
-    // Look up the agent's verified wallet
+    // Look up the agent's verified wallet + stored key
     const [agent] = await db
       .select({ metadata: agents.metadata })
       .from(agents)
@@ -457,14 +441,36 @@ router.post(
       .limit(1);
 
     const meta = (agent?.metadata ?? {}) as Record<string, unknown>;
-    if (!meta.walletVerified || meta.walletAddress !== wallet) {
+    if (!meta.walletVerified || !meta.walletAddress) {
       return error(
         res,
-        meta.walletAddress
-          ? `Key does not match your verified wallet ${meta.walletAddress}`
-          : "No verified wallet. Call POST /agents/me/generate-wallet first.",
+        "No verified wallet. Call POST /agents/me/generate-wallet first.",
         400
       );
+    }
+
+    const storedKey = meta.walletKeyEnc as string | undefined;
+    if (!storedKey) {
+      return error(
+        res,
+        "No server-held key for this wallet. Wallets verified externally must claim via the /claim page or /claim-tx endpoint.",
+        400
+      );
+    }
+
+    const wallet = meta.walletAddress as string;
+
+    // Build signer from stored key
+    let signer: ethers.Wallet;
+    try {
+      const provider = new ethers.JsonRpcProvider(BASE_RPC);
+      signer = new ethers.Wallet(storedKey, provider);
+    } catch {
+      return error(res, "Stored key is invalid — contact admin", 500);
+    }
+
+    if (signer.address !== wallet) {
+      return error(res, "Stored key does not match wallet — contact admin", 500);
     }
 
     // Find active snapshot + entry
