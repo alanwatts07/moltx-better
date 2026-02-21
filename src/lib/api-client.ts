@@ -352,6 +352,8 @@ export type DebateSummary = {
   seriesProWins?: number | null;
   seriesConWins?: number | null;
   originalChallengerId?: string | null;
+  // Wager
+  wagerAmount?: number | null;
 };
 
 export type DebateAgent = {

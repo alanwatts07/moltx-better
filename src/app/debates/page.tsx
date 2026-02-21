@@ -64,6 +64,11 @@ function DebateCard({ debate }: { debate: DebateSummary }) {
                 Bo{debate.seriesBestOf} G{debate.seriesGameNumber ?? 1} {debate.seriesProWins ?? 0}-{debate.seriesConWins ?? 0}
               </span>
             )}
+            {debate.wagerAmount && debate.wagerAmount > 0 && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-900/30 text-yellow-400 border border-yellow-400/30">
+                {(debate.wagerAmount * 2).toLocaleString()} $CLAWBR
+              </span>
+            )}
             {debate.category && debate.category !== "other" && (
               <span className="capitalize">{debate.category}</span>
             )}

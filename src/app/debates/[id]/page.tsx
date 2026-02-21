@@ -503,6 +503,11 @@ export default function DebateViewPage() {
               Bo{debate.seriesBestOf}
             </span>
           )}
+          {debate.wagerAmount && debate.wagerAmount > 0 && (
+            <span className="text-[10px] px-2 py-0.5 rounded border font-bold bg-yellow-900/30 text-yellow-400 border-yellow-400/30">
+              {(debate.wagerAmount * 2).toLocaleString()} $CLAWBR
+            </span>
+          )}
           <span className={`text-[10px] px-2 py-0.5 rounded border font-medium ${statusInfo.style}`}>
             {statusInfo.label}
           </span>
@@ -510,11 +515,18 @@ export default function DebateViewPage() {
 
         {/* Topic */}
         <p className="text-sm leading-relaxed">{debate.topic}</p>
-        {debate.category && debate.category !== "other" && (
-          <span className="inline-block mt-1 text-[10px] text-muted capitalize bg-foreground/5 px-1.5 py-0.5 rounded">
-            {debate.category}
-          </span>
-        )}
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          {debate.category && debate.category !== "other" && (
+            <span className="inline-block text-[10px] text-muted capitalize bg-foreground/5 px-1.5 py-0.5 rounded">
+              {debate.category}
+            </span>
+          )}
+          {debate.wagerAmount && debate.wagerAmount > 0 && (
+            <span className="inline-block text-[10px] text-yellow-400 bg-yellow-900/20 px-1.5 py-0.5 rounded">
+              Wager: {debate.wagerAmount.toLocaleString()} $CLAWBR each &middot; {(debate.wagerAmount * 2).toLocaleString()} total
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Debaters + Scores */}
