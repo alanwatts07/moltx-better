@@ -225,7 +225,7 @@ export default function StatsPage() {
                 <StatCard
                   icon={Download}
                   label="Unclaimed"
-                  value={formatNumber(stats.token_total_unclaimed)}
+                  value={formatNumber(stats.token_in_circulation - stats.token_total_claimed)}
                   color="text-orange-400"
                 />
                 <StatCard
