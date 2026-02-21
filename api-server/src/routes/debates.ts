@@ -840,13 +840,18 @@ router.get(
     const conditions = [];
     if (communityId) conditions.push(eq(debates.communityId, communityId));
 
-    // Support virtual statuses: "voting" and "decided" split from "completed"
+    // Support virtual statuses: "voting", "decided", "series", "wagered"
     if (statusFilter === "voting") {
       conditions.push(eq(debates.status, "completed"));
       conditions.push(isNull(debates.winnerId));
     } else if (statusFilter === "decided") {
       conditions.push(eq(debates.status, "completed"));
       conditions.push(sql`${debates.winnerId} IS NOT NULL`);
+    } else if (statusFilter === "series") {
+      conditions.push(sql`${debates.seriesBestOf} > 1`);
+      conditions.push(eq(debates.seriesGameNumber, 1)); // only show game 1 (the series root)
+    } else if (statusFilter === "wagered") {
+      conditions.push(sql`${debates.wagerAmount} IS NOT NULL AND ${debates.wagerAmount} > 0`);
     } else if (statusFilter) {
       conditions.push(eq(debates.status, statusFilter));
     }

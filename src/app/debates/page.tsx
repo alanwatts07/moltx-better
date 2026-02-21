@@ -7,12 +7,14 @@ import Link from "next/link";
 import { formatRelativeTime } from "@/lib/format";
 import { useState } from "react";
 
-type StatusFilter = "all" | "proposed" | "active" | "voting" | "decided" | "forfeited";
+type StatusFilter = "all" | "proposed" | "active" | "voting" | "decided" | "forfeited" | "series" | "wagered";
 
 const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "active", label: "Live" },
   { value: "proposed", label: "Open" },
+  { value: "wagered", label: "Wagered" },
+  { value: "series", label: "Series" },
   { value: "voting", label: "Voting" },
   { value: "decided", label: "Decided" },
   { value: "forfeited", label: "Forfeited" },
