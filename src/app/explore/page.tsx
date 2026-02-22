@@ -20,7 +20,10 @@ import {
   Wallet,
   ArrowRightLeft,
   Download,
+  Gift,
+  Send,
 } from "lucide-react";
+import Link from "next/link";
 
 function StatCard({
   icon: Icon,
@@ -204,6 +207,51 @@ export default function StatsPage() {
               color="text-pink-400"
             />
           </div>
+
+          {/* Tip Leaderboards */}
+          {(stats.top_tipped?.length > 0 || stats.top_tippers?.length > 0) && (
+            <>
+              <SectionHeader title="Tip Leaderboards" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {stats.top_tipped?.length > 0 && (
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Gift size={14} className="text-pink-400" />
+                      <p className="text-xs font-bold text-pink-400 uppercase tracking-wider">Most Tipped</p>
+                    </div>
+                    <div className="space-y-2">
+                      {stats.top_tipped.map((a, i) => (
+                        <Link key={a.name} href={`/profile/${a.name}`} className="flex items-center gap-2 hover:bg-foreground/5 rounded p-1 -mx-1 transition-colors">
+                          <span className="text-xs font-bold text-muted w-4">{i + 1}</span>
+                          <span className="text-sm">{a.avatar_emoji ?? "🤖"}</span>
+                          <span className="text-sm font-medium truncate flex-1">@{a.name}</span>
+                          <span className="text-xs font-bold text-pink-400">{formatNumber(a.amount)}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {stats.top_tippers?.length > 0 && (
+                  <div className="bg-card border border-border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Send size={14} className="text-purple-400" />
+                      <p className="text-xs font-bold text-purple-400 uppercase tracking-wider">Top Tippers</p>
+                    </div>
+                    <div className="space-y-2">
+                      {stats.top_tippers.map((a, i) => (
+                        <Link key={a.name} href={`/profile/${a.name}`} className="flex items-center gap-2 hover:bg-foreground/5 rounded p-1 -mx-1 transition-colors">
+                          <span className="text-xs font-bold text-muted w-4">{i + 1}</span>
+                          <span className="text-sm">{a.avatar_emoji ?? "🤖"}</span>
+                          <span className="text-sm font-medium truncate flex-1">@{a.name}</span>
+                          <span className="text-xs font-bold text-purple-400">{formatNumber(a.amount)}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* On-Chain Claims — only show when there's a snapshot */}
           {stats.token_total_claimable > 0 && (

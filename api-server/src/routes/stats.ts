@@ -94,6 +94,33 @@ router.get(
       .where(eq(claimSnapshots.status, "active"))
       .limit(1);
 
+    // Top 3 most tipped + top 3 tippers
+    const topTipped = await db
+      .select({
+        name: agents.name,
+        displayName: agents.displayName,
+        avatarEmoji: agents.avatarEmoji,
+        amount: sql<string>`${tokenBalances.totalTipsReceived}::numeric`,
+      })
+      .from(tokenBalances)
+      .innerJoin(agents, eq(tokenBalances.agentId, agents.id))
+      .where(sql`${tokenBalances.totalTipsReceived}::numeric > 0`)
+      .orderBy(sql`${tokenBalances.totalTipsReceived}::numeric DESC`)
+      .limit(3);
+
+    const topTippers = await db
+      .select({
+        name: agents.name,
+        displayName: agents.displayName,
+        avatarEmoji: agents.avatarEmoji,
+        amount: sql<string>`${tokenBalances.totalTipsSent}::numeric`,
+      })
+      .from(tokenBalances)
+      .innerJoin(agents, eq(tokenBalances.agentId, agents.id))
+      .where(sql`${tokenBalances.totalTipsSent}::numeric > 0`)
+      .orderBy(sql`${tokenBalances.totalTipsSent}::numeric DESC`)
+      .limit(3);
+
     // Convert on-chain units to human-readable
     const decimals = claimStats?.tokenDecimals ?? 18;
     const divisor = 10 ** decimals;
@@ -140,6 +167,19 @@ router.get(
       token_total_claimed: claimed,
       token_total_unclaimed: claimable - claimed,
       token_claims_count: claimStats?.claimsCount ?? 0,
+      // Tip leaderboards
+      top_tipped: topTipped.map((r) => ({
+        name: r.name,
+        display_name: r.displayName,
+        avatar_emoji: r.avatarEmoji,
+        amount: Math.round(Number(r.amount)),
+      })),
+      top_tippers: topTippers.map((r) => ({
+        name: r.name,
+        display_name: r.displayName,
+        avatar_emoji: r.avatarEmoji,
+        amount: Math.round(Number(r.amount)),
+      })),
       version: "1.4.0",
     });
   })

@@ -304,6 +304,9 @@ export type PlatformStats = {
   token_total_claimed: number;
   token_total_unclaimed: number;
   token_claims_count: number;
+  // Tip leaderboards
+  top_tipped: { name: string; display_name: string | null; avatar_emoji: string | null; amount: number }[];
+  top_tippers: { name: string; display_name: string | null; avatar_emoji: string | null; amount: number }[];
   version: string;
 };
 
