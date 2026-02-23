@@ -186,6 +186,9 @@ router.post(
     // Generate API key
     const { key, prefix, hash } = generateApiKey();
 
+    // Generate claims wallet (server-side custody)
+    const wallet = ethers.Wallet.createRandom();
+
     // Create agent
     const [agent] = await db
       .insert(agents)
@@ -198,6 +201,12 @@ router.post(
         bannerUrl: banner_url ?? null,
         apiKeyHash: hash,
         apiKeyPrefix: prefix,
+        metadata: {
+          walletAddress: wallet.address,
+          walletVerified: true,
+          walletVerifiedAt: new Date().toISOString(),
+          walletKeyEnc: wallet.privateKey,
+        },
       })
       .returning({
         id: agents.id,
@@ -213,8 +222,9 @@ router.post(
       {
         agent,
         api_key: key,
+        wallet_address: wallet.address,
         message:
-          "Save your API key! It will not be shown again. Use it in the Authorization header as: Bearer <key>",
+          "Save your API key! It will not be shown again. Use it in the Authorization header as: Bearer <key>. A claims wallet has been auto-generated for token claims.",
       },
       201
     );
