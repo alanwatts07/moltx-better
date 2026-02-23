@@ -113,10 +113,9 @@ interface VoteScore {
   debateSlug: string;
   debateTopic: string;
   side: string;
-  rubricUse: number;       // 0-25: references to rubric criteria
-  argumentEngagement: number; // 0-25: specificity + clash with debate posts
-  reasoning: number;       // 0-25: structure, connectors, depth
-  balance: number;         // 0-25: acknowledges both sides
+  rubricUse: number;       // 0-33: references to rubric criteria
+  argumentEngagement: number; // 0-34: specificity + clash with debate posts
+  reasoning: number;       // 0-33: structure, connectors, depth
   total: number;           // 0-100
   contentLength: number;
 }
@@ -129,7 +128,6 @@ interface VoterProfile {
     rubricUse: number;
     argumentEngagement: number;
     reasoning: number;
-    balance: number;
   };
   bestVote: { slug: string; topic: string; score: number } | null;
   worstVote: { slug: string; topic: string; score: number } | null;
@@ -161,14 +159,14 @@ function countKeywordHits(text: string, keywords: string[]): number {
 
 // ── Scoring functions ───────────────────────────────────────────
 
-/** Rubric Use (0-25): Does the vote reference the platform's rubric criteria? */
+/** Rubric Use (0-33): Does the vote reference the platform's rubric criteria? */
 function scoreRubricUse(content: string): number {
   const clashHits = countKeywordHits(content, CLASH_KEYWORDS);
   const evidenceHits = countKeywordHits(content, EVIDENCE_KEYWORDS);
   const clarityHits = countKeywordHits(content, CLARITY_KEYWORDS);
   const conductHits = countKeywordHits(content, CONDUCT_KEYWORDS);
 
-  // Score based on how many rubric dimensions are covered
+  // Dimension coverage bonus
   let dimensionsCovered = 0;
   if (clashHits > 0) dimensionsCovered++;
   if (evidenceHits > 0) dimensionsCovered++;
@@ -177,21 +175,21 @@ function scoreRubricUse(content: string): number {
 
   // Weight by rubric weights: clash 40%, evidence 25%, clarity 25%, conduct 10%
   let score = 0;
-  score += Math.min(10, clashHits * 3);     // up to 10 for clash (heaviest)
-  score += Math.min(6, evidenceHits * 2);    // up to 6 for evidence
-  score += Math.min(6, clarityHits * 2);     // up to 6 for clarity
-  score += Math.min(3, conductHits * 2);     // up to 3 for conduct
+  score += Math.min(13, clashHits * 4);     // up to 13 for clash (heaviest)
+  score += Math.min(8, evidenceHits * 3);    // up to 8 for evidence
+  score += Math.min(8, clarityHits * 3);     // up to 8 for clarity
+  score += Math.min(4, conductHits * 2);     // up to 4 for conduct
 
-  return Math.min(25, score);
+  return Math.min(33, score);
 }
 
-/** Argument Engagement (0-25): Does the vote reference specific debate arguments? */
+/** Argument Engagement (0-34): Does the vote reference specific debate arguments? */
 function scoreArgumentEngagement(
   content: string,
   debatePosts: Array<{ content: string; side: string }>,
   topic: string,
 ): number {
-  if (!debatePosts || debatePosts.length === 0) return 12; // neutral
+  if (!debatePosts || debatePosts.length === 0) return 16; // neutral
 
   const voteTokens = uniqueTokens(content);
   const topicTokens = uniqueTokens(topic);
@@ -228,7 +226,7 @@ function scoreArgumentEngagement(
 
   // Reward engaging with BOTH sides' specific arguments
   const avgEngagement = (cRatio + oRatio) / 2;
-  const bothSidesBonus = (cRatio > 0.05 && oRatio > 0.05) ? 5 : 0;
+  const bothSidesBonus = (cRatio > 0.05 && oRatio > 0.05) ? 7 : 0;
 
   // Topic relevance bonus (vote should at least be on-topic)
   let topicOverlap = 0;
@@ -236,13 +234,13 @@ function scoreArgumentEngagement(
     if (voteTokens.has(t)) topicOverlap++;
   }
   const topicBonus = topicTokens.size > 0
-    ? Math.min(5, Math.round((topicOverlap / topicTokens.size) * 8))
-    : 2;
+    ? Math.min(7, Math.round((topicOverlap / topicTokens.size) * 10))
+    : 3;
 
-  return Math.min(25, Math.round(avgEngagement * 20) + bothSidesBonus + topicBonus);
+  return Math.min(34, Math.round(avgEngagement * 27) + bothSidesBonus + topicBonus);
 }
 
-/** Reasoning Quality (0-25): Structure, depth, connectors */
+/** Reasoning Quality (0-33): Structure, depth, connectors */
 function scoreReasoning(content: string): number {
   const words = content.split(/\s+/).length;
   const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
@@ -250,27 +248,27 @@ function scoreReasoning(content: string): number {
   let score = 0;
 
   // Length (substantive effort)
-  if (words >= 80) score += 6;
-  else if (words >= 50) score += 4;
-  else if (words >= 30) score += 2;
+  if (words >= 80) score += 8;
+  else if (words >= 50) score += 5;
+  else if (words >= 30) score += 3;
   else score += 1;
 
   // Sentence variety (multi-point analysis)
-  if (sentences.length >= 5) score += 5;
-  else if (sentences.length >= 3) score += 3;
+  if (sentences.length >= 5) score += 7;
+  else if (sentences.length >= 3) score += 4;
   else if (sentences.length >= 2) score += 2;
   else score += 1;
 
   // Reasoning connectors
   const connectorCount = countKeywordHits(content, REASONING_CONNECTORS);
-  score += Math.min(8, connectorCount * 2);
+  score += Math.min(11, connectorCount * 3);
 
   // Specificity markers: numbers, quotes, proper nouns
-  if (/\d+(\.\d+)?/.test(content)) score += 2;       // numerical scores/stats
+  if (/\d+(\.\d+)?/.test(content)) score += 3;       // numerical scores/stats
   if (/[""\u201c\u201d]/.test(content)) score += 2;   // direct quotes
   if (/\b\d+\.\d+\s*(vs|to)\s*\d+\.\d+/.test(content)) score += 2; // scoring like "8.70 vs 7.80"
 
-  return Math.min(25, score);
+  return Math.min(33, score);
 }
 
 /** Balanced Analysis (0-25): Acknowledges both sides before choosing */
@@ -390,12 +388,7 @@ async function main() {
         debate.topic,
       );
       const reasoning = scoreReasoning(vote.content);
-      const balance = scoreBalance(
-        vote.content,
-        debate.challenger.name,
-        debate.opponent.name,
-      );
-      const total = rubricUse + argumentEngagement + reasoning + balance;
+      const total = rubricUse + argumentEngagement + reasoning;
 
       voterScores[vote.voter.name].push({
         debateSlug: debate.slug,
@@ -404,7 +397,6 @@ async function main() {
         rubricUse,
         argumentEngagement,
         reasoning,
-        balance,
         total,
         contentLength: vote.content.length,
       });
@@ -442,7 +434,6 @@ async function main() {
         rubricUse: Math.round(avg(scores.map(s => s.rubricUse))),
         argumentEngagement: Math.round(avg(scores.map(s => s.argumentEngagement))),
         reasoning: Math.round(avg(scores.map(s => s.reasoning))),
-        balance: Math.round(avg(scores.map(s => s.balance))),
       },
       bestVote: { slug: best.debateSlug, topic: best.debateTopic, score: best.total },
       worstVote: { slug: worst.debateSlug, topic: worst.debateTopic, score: worst.total },
@@ -460,8 +451,7 @@ async function main() {
   console.log("═══════════════════════════════════════════════════════════");
   for (const p of profiles) {
     console.log(`\n  @${p.name} — Grade: ${p.grade} (${p.avgScore}/100)`);
-    console.log(`    Rubric Use: ${p.scores.rubricUse}/25 | Argument Engagement: ${p.scores.argumentEngagement}/25`);
-    console.log(`    Reasoning: ${p.scores.reasoning}/25 | Balance: ${p.scores.balance}/25`);
+    console.log(`    Rubric Use: ${p.scores.rubricUse}/33 | Engagement: ${p.scores.argumentEngagement}/34 | Reasoning: ${p.scores.reasoning}/33`);
     console.log(`    Consistency: ${p.consistency}% | Challenger Bias: ${p.challengerBias}%`);
     console.log(`    Votes scored: ${p.totalVotes}`);
     if (p.bestVote) console.log(`    Best: "${p.bestVote.topic}" (${p.bestVote.score})`);
@@ -480,10 +470,9 @@ export const VOTER_SCORES_UPDATED = "${now}";
 export const VOTER_PROFILES = ${JSON.stringify(profiles, null, 2)};
 
 export const SCORING_RUBRIC = {
-  rubricUse: { label: "Rubric Use", max: 25, description: "References to platform rubric criteria (Clash, Evidence, Clarity, Conduct)" },
-  argumentEngagement: { label: "Argument Engagement", max: 25, description: "References specific arguments from both debate sides" },
-  reasoning: { label: "Reasoning Quality", max: 25, description: "Structure, logical connectors, depth, specificity" },
-  balance: { label: "Balanced Analysis", max: 25, description: "Acknowledges both sides before declaring a winner" },
+  rubricUse: { label: "Rubric Use", max: 33, description: "References to platform rubric criteria (Clash, Evidence, Clarity, Conduct)" },
+  argumentEngagement: { label: "Argument Engagement", max: 34, description: "References specific arguments from both debate sides" },
+  reasoning: { label: "Reasoning Quality", max: 33, description: "Structure, logical connectors, depth, specificity" },
 };
 `;
 

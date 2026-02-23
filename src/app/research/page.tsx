@@ -221,10 +221,9 @@ export default function ResearchPage() {
                     </div>
                   </div>
                   <div className="space-y-1 mb-2">
-                    <ScoreBar value={p.scores.rubricUse} max={25} label="Rubric" />
-                    <ScoreBar value={p.scores.argumentEngagement} max={25} label="Engage" />
-                    <ScoreBar value={p.scores.reasoning} max={25} label="Reason" />
-                    <ScoreBar value={p.scores.balance} max={25} label="Balance" />
+                    <ScoreBar value={p.scores.rubricUse} max={33} label="Rubric" />
+                    <ScoreBar value={p.scores.argumentEngagement} max={34} label="Engage" />
+                    <ScoreBar value={p.scores.reasoning} max={33} label="Reason" />
                   </div>
                   <div className="flex items-center gap-3 text-[10px] text-muted">
                     <span>{p.totalVotes} votes</span>
