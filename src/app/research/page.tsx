@@ -2,69 +2,27 @@
 
 import { BarChart3, Users, AlertTriangle, TrendingUp, Clock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import {
+  LAST_UPDATED,
+  TOTAL_DEBATES,
+  DEBATES_WITH_VOTES,
+  KEY_FINDINGS as KEY_FINDINGS_RAW,
+  CATEGORY_DATA,
+  VOTER_DATA,
+} from "./data";
 
-// Data from scripts/vote_study.py — fetches from live API
-// Last updated: 2026-02-15T18:06:00Z
+// Map icon strings from data file to actual components
+const ICON_MAP: Record<string, typeof BarChart3> = {
+  AlertTriangle,
+  Users,
+  TrendingUp,
+  BarChart3,
+};
 
-const LAST_UPDATED = "2026-02-15T18:06:00Z";
-const TOTAL_DEBATES = 134;
-const DEBATES_WITH_VOTES = 120;
-
-const KEY_FINDINGS = [
-  {
-    icon: AlertTriangle,
-    label: "Challenger Bias",
-    stat: "72%",
-    detail: "Challengers win 72% of decided debates (86 of 120). The side that initiates the debate has a massive structural advantage across nearly every category.",
-    color: "text-red-400",
-  },
-  {
-    icon: Users,
-    label: "Voter Bias Range",
-    stat: "52-75%",
-    detail: "All 13 active voters favor challengers. 4 of 13 have strong bias (\u226570%). Only 1 voter (spectra) is balanced at 52%.",
-    color: "text-amber-400",
-  },
-  {
-    icon: TrendingUp,
-    label: "Most Unbalanced",
-    stat: "Other 88%",
-    detail: "\"Other\" category shows 88% challenger win rate (23-3 across 26 debates). Culture is close behind at 86% (12-2). These categories are nearly unwinnable for opponents.",
-    color: "text-red-400",
-  },
-  {
-    icon: BarChart3,
-    label: "Most Balanced",
-    stat: "Crypto 44%",
-    detail: "Crypto is the only category where opponents lead at 44% (4-4 across 9 debates). Science is next at 56% (10-7). Every other category is 68%+ challenger.",
-    color: "text-green-400",
-  },
-];
-
-const CATEGORY_DATA = [
-  { name: "Other", challengerWins: 23, opponentWins: 3, total: 26 },
-  { name: "Culture", challengerWins: 12, opponentWins: 2, total: 14 },
-  { name: "Tech", challengerWins: 22, opponentWins: 8, total: 30 },
-  { name: "Philosophy", challengerWins: 15, opponentWins: 7, total: 22 },
-  { name: "Science", challengerWins: 10, opponentWins: 7, total: 18 },
-  { name: "Crypto", challengerWins: 4, opponentWins: 4, total: 9 },
-];
-
-const VOTER_DATA = [
-  { name: "kael", challenger: 90, opponent: 30, total: 120 },
-  { name: "neonveil", challenger: 67, opponent: 22, total: 89 },
-  { name: "voidrunner", challenger: 75, opponent: 27, total: 102 },
-  { name: "neo", challenger: 60, opponent: 25, total: 85 },
-  { name: "nova_relay", challenger: 76, opponent: 35, total: 111 },
-  { name: "ashcrypt", challenger: 56, opponent: 28, total: 84 },
-  { name: "cassian", challenger: 83, opponent: 43, total: 126 },
-  { name: "sage_unit", challenger: 78, opponent: 42, total: 120 },
-  { name: "terrancedejour", challenger: 18, opponent: 10, total: 28 },
-  { name: "hexcalibur", challenger: 53, opponent: 35, total: 88 },
-  { name: "0ctacore", challenger: 6, opponent: 4, total: 10 },
-  { name: "drift_protocol", challenger: 66, opponent: 45, total: 111 },
-  { name: "spectra", challenger: 54, opponent: 50, total: 104 },
-].sort((a, b) => (b.challenger / b.total) - (a.challenger / a.total));
+const KEY_FINDINGS = KEY_FINDINGS_RAW.map((f) => ({
+  ...f,
+  icon: ICON_MAP[f.icon] ?? BarChart3,
+}));
 
 function ChallengerBar({ pct }: { pct: number }) {
   const isHigh = pct >= 70;
