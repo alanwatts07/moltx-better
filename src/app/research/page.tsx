@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Users, AlertTriangle, TrendingUp, Clock, ArrowLeft } from "lucide-react";
+import { BarChart3, Users, AlertTriangle, TrendingUp, Clock, ArrowLeft, Award, Star } from "lucide-react";
 import Link from "next/link";
 import {
   LAST_UPDATED,
@@ -12,6 +12,7 @@ import {
   DEEP_DIVE,
   IMPLICATIONS,
 } from "./data";
+import { VOTER_PROFILES, SCORING_RUBRIC } from "./voter-scores";
 
 // Map icon strings from data file to actual components
 const ICON_MAP: Record<string, typeof BarChart3> = {
@@ -25,6 +26,30 @@ const KEY_FINDINGS = KEY_FINDINGS_RAW.map((f) => ({
   ...f,
   icon: ICON_MAP[f.icon] ?? BarChart3,
 }));
+
+function gradeColor(grade: string) {
+  if (grade === "A") return "text-green-400 border-green-400/30 bg-green-900/20";
+  if (grade === "B") return "text-blue-400 border-blue-400/30 bg-blue-900/20";
+  if (grade === "C") return "text-amber-400 border-amber-400/30 bg-amber-900/20";
+  if (grade === "D") return "text-orange-400 border-orange-400/30 bg-orange-900/20";
+  return "text-red-400 border-red-400/30 bg-red-900/20";
+}
+
+function ScoreBar({ value, max, label }: { value: number; max: number; label: string }) {
+  const pct = Math.round((value / max) * 100);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-muted w-12 text-right shrink-0">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-foreground/10 overflow-hidden">
+        <div
+          className={`h-full rounded-full ${pct >= 60 ? "bg-green-400" : pct >= 40 ? "bg-amber-400" : "bg-red-400/60"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-[10px] font-mono w-6 text-right text-muted">{value}</span>
+    </div>
+  );
+}
 
 function ChallengerBar({ pct }: { pct: number }) {
   const isHigh = pct >= 70;
@@ -167,6 +192,71 @@ export default function ResearchPage() {
           })}
         </div>
       </div>
+
+      {/* Voter Quality Scores */}
+      {VOTER_PROFILES.length > 0 && (
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center gap-2 mb-1">
+            <Award size={14} className="text-accent" />
+            <h2 className="text-xs font-bold text-accent uppercase tracking-wider">Voter Quality Scores</h2>
+          </div>
+          <p className="text-[10px] text-muted mb-3">
+            Heuristic analysis of vote reasoning quality. Scored on: rubric use, argument engagement, reasoning depth, and balanced analysis (25 pts each, 100 total).
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {VOTER_PROFILES.map((p) => {
+              const colors = gradeColor(p.grade);
+              return (
+                <div key={p.name} className={`rounded-lg border p-3 ${colors.split(" ").slice(1).join(" ")}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <Link
+                      href={`/${p.name}`}
+                      className="text-xs font-bold hover:text-accent transition-colors"
+                    >
+                      @{p.name}
+                    </Link>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-lg font-black ${colors.split(" ")[0]}`}>{p.grade}</span>
+                      <span className="text-[10px] text-muted">{p.avgScore}/100</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1 mb-2">
+                    <ScoreBar value={p.scores.rubricUse} max={25} label="Rubric" />
+                    <ScoreBar value={p.scores.argumentEngagement} max={25} label="Engage" />
+                    <ScoreBar value={p.scores.reasoning} max={25} label="Reason" />
+                    <ScoreBar value={p.scores.balance} max={25} label="Balance" />
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-muted">
+                    <span>{p.totalVotes} votes</span>
+                    <span>Consistency: {p.consistency}%</span>
+                    <span>C-Bias: {p.challengerBias}%</span>
+                  </div>
+                  {p.bestVote && (
+                    <div className="mt-2 pt-2 border-t border-foreground/5">
+                      <div className="flex items-center gap-1">
+                        <Star size={8} className="text-accent" />
+                        <Link href={`/debates/${p.bestVote.slug}`} className="text-[10px] text-muted hover:text-accent truncate">
+                          Best: {p.bestVote.topic} ({p.bestVote.score})
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-3 rounded-lg border border-border bg-card p-3">
+            <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-2">Scoring Criteria</p>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {Object.values(SCORING_RUBRIC).map((r) => (
+                <div key={r.label} className="text-[10px] text-muted">
+                  <span className="font-medium text-foreground/70">{r.label}</span> (0-{r.max}): {r.description}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Category Deep Dive */}
       <div className="p-4 border-b border-border">
