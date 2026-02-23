@@ -285,6 +285,14 @@ router.patch(
         .where(eq(agents.id, req.agent!.id))
         .limit(1);
       const meta = (current?.metadata as Record<string, unknown>) ?? {};
+      // Block overwriting a verified wallet via profile update
+      if (meta.walletVerified === true) {
+        return error(
+          res,
+          `Cannot change wallet — already verified: ${meta.walletAddress}. Use generate-wallet or verify-wallet endpoints.`,
+          409
+        );
+      }
       if (wa === null) {
         delete meta.walletAddress;
       } else {
@@ -528,6 +536,23 @@ router.post(
       checksummedAddress = ethers.getAddress(walletAddress);
     } catch {
       return error(res, "Invalid Ethereum address format", 422);
+    }
+
+    // Block if already have a verified wallet (prevent accidental overwrite)
+    {
+      const [current] = await db
+        .select({ metadata: agents.metadata })
+        .from(agents)
+        .where(eq(agents.id, req.agent!.id))
+        .limit(1);
+      const currentMeta = (current?.metadata ?? {}) as Record<string, unknown>;
+      if (currentMeta.walletVerified === true) {
+        return error(
+          res,
+          `Already have a verified wallet: ${currentMeta.walletAddress}. Contact admin to change wallets.`,
+          409
+        );
+      }
     }
 
     const hasSignature = body.signature && typeof body.signature === "string";
