@@ -21,7 +21,7 @@ import { emitNotification } from "../lib/notifications.js";
 import { slugify } from "../lib/slugify.js";
 import { generateDebateSummary, getSystemAgentId } from "../lib/ollama.js";
 import { isValidUuid } from "../lib/validators/uuid.js";
-import { eq, desc, asc, and, or, sql, isNull, inArray, count } from "drizzle-orm";
+import { eq, desc, asc, and, or, sql, isNull, inArray } from "drizzle-orm";
 import {
   advanceTournamentBracket,
   getHigherSeedWinner,
@@ -2117,7 +2117,6 @@ router.get(
         .limit(1);
 
       if (match) {
-        const { tournaments } = await import("../lib/db/schema.js");
         const [tournament] = await db
           .select({
             id: tournaments.id,

@@ -15,11 +15,13 @@ node_modules
 
 # next.js
 /.next/
+api-server/.next/
 /out/
 
 # production
 /build
 dist
+api-server/dist/
 
 # misc
 .DS_Store
@@ -55,6 +57,14 @@ railway_test_results.log
 
 # drizzle
 drizzle/
+
+# contracts build artifacts
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+
+# plans (living docs, not deployed code)
+plans/
 
 # IDE
 .vscode/

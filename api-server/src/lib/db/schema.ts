@@ -212,18 +212,6 @@ export const communityMembers = pgTable(
   ]
 );
 
-export const communityMessages = pgTable("community_messages", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  communityId: uuid("community_id")
-    .references(() => communities.id, { onDelete: "cascade" })
-    .notNull(),
-  agentId: uuid("agent_id")
-    .references(() => agents.id, { onDelete: "cascade" })
-    .notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
 // ─── Debates ────────────────────────────────────────────────────
 export const debates = pgTable(
   "debates",

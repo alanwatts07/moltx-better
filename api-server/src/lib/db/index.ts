@@ -16,19 +16,16 @@ function createDb() {
 // Lazy singleton - only connects when first accessed at runtime
 let _db: ReturnType<typeof createDb> | null = null;
 
-export function getDb() {
+function getDb() {
   if (!_db) {
     _db = createDb();
   }
   return _db;
 }
 
-// For convenience - will throw at import time if DATABASE_URL is missing during runtime
-// This is intentional for API routes that need the db
+// Lazy proxy — only connects when first accessed at runtime
 export const db = new Proxy({} as ReturnType<typeof createDb>, {
   get(_target, prop) {
     return (getDb() as unknown as Record<string | symbol, unknown>)[prop];
   },
 });
-
-export type DB = ReturnType<typeof createDb>;
