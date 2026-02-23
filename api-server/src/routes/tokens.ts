@@ -15,6 +15,7 @@ import { emitNotification } from "../lib/notifications.js";
 import { emitActivity } from "../lib/activity.js";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { z } from "zod";
+import { createSnapshot } from "../lib/snapshot.js";
 
 const router = Router();
 
@@ -190,6 +191,44 @@ router.post(
 );
 
 /**
+ * Ensure an active snapshot exists that includes the given wallet.
+ * If no snapshot exists, or the wallet isn't in the current one, auto-create a fresh snapshot.
+ * Returns { snapshot, entry } or null if wallet is not eligible.
+ */
+async function ensureSnapshotForWallet(wallet: string) {
+  // Check current active snapshot
+  let [snapshot] = await db
+    .select()
+    .from(claimSnapshots)
+    .where(eq(claimSnapshots.status, "active"))
+    .limit(1);
+
+  let entry = snapshot
+    ? (await db
+        .select()
+        .from(claimEntries)
+        .where(and(eq(claimEntries.snapshotId, snapshot.id), eq(claimEntries.walletAddress, wallet)))
+        .limit(1))[0]
+    : undefined;
+
+  // Auto-create snapshot if missing or wallet not in it
+  if (!snapshot || !entry) {
+    const result = await createSnapshot();
+    if (!result) return null;
+
+    snapshot = result.snapshot;
+    entry = (await db
+      .select()
+      .from(claimEntries)
+      .where(and(eq(claimEntries.snapshotId, snapshot.id), eq(claimEntries.walletAddress, wallet)))
+      .limit(1))[0];
+  }
+
+  if (!entry) return null;
+  return { snapshot, entry };
+}
+
+/**
  * GET /claim-proof/:wallet — Get Merkle claim proof for a wallet (public)
  */
 router.get(
@@ -202,32 +241,11 @@ router.get(
       return error(res, "Invalid Ethereum address", 422);
     }
 
-    // Find the active snapshot
-    const [snapshot] = await db
-      .select()
-      .from(claimSnapshots)
-      .where(eq(claimSnapshots.status, "active"))
-      .limit(1);
-
-    if (!snapshot) {
-      return error(res, "No active claim snapshot", 404);
+    const result = await ensureSnapshotForWallet(wallet);
+    if (!result) {
+      return error(res, "No claimable balance for this wallet (need verified wallet + positive balance)", 404);
     }
-
-    // Find entry for this wallet (case-insensitive via checksummed match)
-    const [entry] = await db
-      .select()
-      .from(claimEntries)
-      .where(
-        and(
-          eq(claimEntries.snapshotId, snapshot.id),
-          eq(claimEntries.walletAddress, wallet)
-        )
-      )
-      .limit(1);
-
-    if (!entry) {
-      return error(res, "No claim found for this wallet", 404);
-    }
+    const { snapshot, entry } = result;
 
     return success(res, {
       leaf_index: entry.leafIndex,
@@ -259,35 +277,14 @@ router.get(
       return error(res, "Invalid Ethereum address", 422);
     }
 
-    // Find the active snapshot
-    const [snapshot] = await db
-      .select()
-      .from(claimSnapshots)
-      .where(eq(claimSnapshots.status, "active"))
-      .limit(1);
-
-    if (!snapshot) {
-      return error(res, "No active claim snapshot", 404);
+    const result = await ensureSnapshotForWallet(wallet);
+    if (!result) {
+      return error(res, "No claimable balance for this wallet (need verified wallet + positive balance)", 404);
     }
+    const { snapshot, entry } = result;
 
     if (!snapshot.contractAddress) {
       return error(res, "Contract not deployed yet", 400);
-    }
-
-    // Find entry for this wallet
-    const [entry] = await db
-      .select()
-      .from(claimEntries)
-      .where(
-        and(
-          eq(claimEntries.snapshotId, snapshot.id),
-          eq(claimEntries.walletAddress, wallet)
-        )
-      )
-      .limit(1);
-
-    if (!entry) {
-      return error(res, "No claim found for this wallet", 404);
     }
 
     if (entry.claimed) {
@@ -345,32 +342,14 @@ router.post(
       return error(res, "tx_hash is required (0x...)", 422);
     }
 
-    // Find active snapshot
-    const [snapshot] = await db
-      .select()
-      .from(claimSnapshots)
-      .where(eq(claimSnapshots.status, "active"))
-      .limit(1);
-
-    if (!snapshot) {
-      return error(res, "No active claim snapshot", 404);
+    const result = await ensureSnapshotForWallet(wallet);
+    if (!result) {
+      return error(res, "No claimable balance for this wallet", 404);
     }
+    const { snapshot, entry } = result;
 
-    // Find unclaimed entry
-    const [entry] = await db
-      .select()
-      .from(claimEntries)
-      .where(
-        and(
-          eq(claimEntries.snapshotId, snapshot.id),
-          eq(claimEntries.walletAddress, wallet),
-          eq(claimEntries.claimed, false)
-        )
-      )
-      .limit(1);
-
-    if (!entry) {
-      return error(res, "No unclaimed entry found for this wallet", 404);
+    if (entry.claimed) {
+      return error(res, "Already claimed", 400);
     }
 
     // Mark as claimed
@@ -473,31 +452,19 @@ router.post(
       return error(res, "Stored key does not match wallet — contact admin", 500);
     }
 
-    // Find active snapshot + entry
-    const [snapshot] = await db
-      .select()
-      .from(claimSnapshots)
-      .where(eq(claimSnapshots.status, "active"))
-      .limit(1);
+    // Auto-snapshot if needed
+    const result = await ensureSnapshotForWallet(wallet);
+    if (!result) {
+      return error(res, "No claimable balance for your wallet", 404);
+    }
+    const { snapshot, entry } = result;
 
-    if (!snapshot || !snapshot.contractAddress) {
-      return error(res, "No active claim snapshot with a deployed contract", 404);
+    if (!snapshot.contractAddress) {
+      return error(res, "No deployed contract — contact admin", 404);
     }
 
-    const [entry] = await db
-      .select()
-      .from(claimEntries)
-      .where(
-        and(
-          eq(claimEntries.snapshotId, snapshot.id),
-          eq(claimEntries.walletAddress, wallet),
-          eq(claimEntries.claimed, false)
-        )
-      )
-      .limit(1);
-
-    if (!entry) {
-      return error(res, "No unclaimed entry found for your wallet", 404);
+    if (entry.claimed) {
+      return error(res, "Already claimed in this snapshot", 400);
     }
 
     // Check if already claimed on-chain

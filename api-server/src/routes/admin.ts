@@ -1,18 +1,16 @@
 import { Router } from "express";
-import { ethers } from "ethers";
 import { db } from "../lib/db/index.js";
 import {
   agents, notifications, posts, debateStats,
   tournamentParticipants, tournaments, tokenBalances,
-  claimSnapshots, claimEntries,
 } from "../lib/db/schema.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, error } from "../lib/api-utils.js";
-import { eq, and, sql, gt } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getSystemAgentId } from "../lib/ollama.js";
 import { creditTokens, TOKEN_REWARDS } from "../lib/tokens.js";
-import { buildMerkleTree } from "../lib/merkle.js";
+import { createSnapshot } from "../lib/snapshot.js";
 
 const router = Router();
 
@@ -306,134 +304,24 @@ router.post(
       return error(res, "Admin access required", 403);
     }
 
-    const tokenDecimals = req.body.token_decimals ?? 18;
-    let contractAddress = req.body.contract_address ?? null;
-
-    // If no contract_address provided, inherit from the current active snapshot
-    if (!contractAddress) {
-      const [prev] = await db
-        .select({ contractAddress: claimSnapshots.contractAddress })
-        .from(claimSnapshots)
-        .where(eq(claimSnapshots.status, "active"))
-        .limit(1);
-      if (prev?.contractAddress) {
-        contractAddress = prev.contractAddress;
-      }
-    }
-
-    // Find agents with verified wallets AND positive balance
-    const eligibleRows = await db
-      .select({
-        agentId: tokenBalances.agentId,
-        balance: tokenBalances.balance,
-        metadata: agents.metadata,
-        name: agents.name,
-      })
-      .from(tokenBalances)
-      .innerJoin(agents, eq(tokenBalances.agentId, agents.id))
-      .where(gt(sql`${tokenBalances.balance}::numeric`, sql`0`));
-
-    // Filter to those with walletVerified:true in metadata
-    const eligible = eligibleRows.filter((r) => {
-      const m = (r.metadata as Record<string, unknown>) ?? {};
-      return m.walletVerified === true && typeof m.walletAddress === "string";
+    const result = await createSnapshot({
+      tokenDecimals: req.body.token_decimals,
+      contractAddress: req.body.contract_address,
     });
 
-    if (eligible.length === 0) {
+    if (!result) {
       return error(res, "No eligible agents found (need walletVerified:true and balance > 0)", 400);
     }
 
-    // Build merkle entries
-    const merkleEntries = eligible.map((r, idx) => {
-      const m = (r.metadata as Record<string, unknown>) ?? {};
-      const wallet = ethers.getAddress(m.walletAddress as string);
-      const balanceNum = Number(r.balance);
-      const amountOnChain = ethers.parseUnits(String(balanceNum), tokenDecimals).toString();
-      return {
-        index: idx,
-        wallet,
-        amountOnChain,
-        agentId: r.agentId,
-        name: r.name,
-        balance: balanceNum,
-      };
-    });
-
-    // Build tree
-    const { root, proofs } = buildMerkleTree(
-      merkleEntries.map((e) => ({ index: e.index, wallet: e.wallet, amountOnChain: e.amountOnChain }))
-    );
-
-    const totalClaimable = merkleEntries.reduce(
-      (acc, e) => acc + BigInt(e.amountOnChain),
-      0n
-    ).toString();
-
-    // Mark previous active snapshots as superseded
-    await db
-      .update(claimSnapshots)
-      .set({ status: "superseded" })
-      .where(eq(claimSnapshots.status, "active"));
-
-    // Insert snapshot
-    const [snapshot] = await db
-      .insert(claimSnapshots)
-      .values({
-        merkleRoot: root,
-        totalClaimable,
-        entriesCount: merkleEntries.length,
-        contractAddress,
-        chainId: 8453,
-        status: "active",
-        tokenDecimals,
-      })
-      .returning();
-
-    // Insert entries
-    const entryValues = merkleEntries.map((e) => ({
-      snapshotId: snapshot.id,
-      leafIndex: e.index,
-      agentId: e.agentId,
-      walletAddress: e.wallet,
-      amount: String(e.balance),
-      amountOnChain: e.amountOnChain,
-      proof: proofs.get(e.index) ?? [],
-    }));
-
-    await db.insert(claimEntries).values(entryValues);
-
-    // Auto-update merkle root on-chain if contract is deployed and owner key is available
-    let onChainUpdate: { tx_hash: string } | { skipped: string } | null = null;
-    const ownerKey = process.env.DISTRIBUTOR_OWNER_KEY;
-    if (contractAddress && ownerKey) {
-      try {
-        const baseRpc = process.env.BASE_RPC_URL || "https://mainnet.base.org";
-        const provider = new ethers.JsonRpcProvider(baseRpc);
-        const signer = new ethers.Wallet(ownerKey, provider);
-        const contract = new ethers.Contract(
-          contractAddress,
-          ["function updateMerkleRoot(bytes32, uint256) external"],
-          signer
-        );
-        const maxIndex = merkleEntries.length > 0 ? merkleEntries.length - 1 : 0;
-        const tx = await contract.updateMerkleRoot(root, maxIndex);
-        await tx.wait();
-        onChainUpdate = { tx_hash: tx.hash };
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        onChainUpdate = { skipped: `On-chain update failed: ${msg}` };
-      }
-    } else if (contractAddress && !ownerKey) {
-      onChainUpdate = { skipped: "DISTRIBUTOR_OWNER_KEY env var not set — update merkle root on-chain manually" };
-    }
+    const { snapshot, merkleEntries, onChainUpdate } = result;
 
     return success(res, {
       snapshot_id: snapshot.id,
-      merkle_root: root,
+      merkle_root: snapshot.merkleRoot,
       entries_count: merkleEntries.length,
-      total_claimable: totalClaimable,
-      token_decimals: tokenDecimals,
-      contract_address: contractAddress,
+      total_claimable: snapshot.totalClaimable,
+      token_decimals: snapshot.tokenDecimals,
+      contract_address: snapshot.contractAddress,
       on_chain_update: onChainUpdate,
       breakdown: merkleEntries.map((e) => ({
         agent: e.name,
