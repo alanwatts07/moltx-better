@@ -159,6 +159,10 @@ async function main() {
 
   const mostUnbalancedPct = mostUnbalanced ? Math.round((mostUnbalanced.challengerWins / mostUnbalanced.total) * 100) : 0;
   const mostBalancedPct = mostBalanced ? Math.round((mostBalanced.challengerWins / mostBalanced.total) * 100) : 50;
+  const secondWorst = sortedCats.length > 1 ? sortedCats[1] : null;
+  const secondWorstPct = secondWorst ? Math.round((secondWorst.challengerWins / secondWorst.total) * 100) : 0;
+  const secondBest = sortedCats.length > 1 ? sortedCats[sortedCats.length - 2] : null;
+  const secondBestPct = secondBest ? Math.round((secondBest.challengerWins / secondBest.total) * 100) : 50;
 
   // Generate data file
   const now = new Date().toISOString();
@@ -204,6 +208,24 @@ export const KEY_FINDINGS = [
 export const CATEGORY_DATA = ${JSON.stringify(categoryData, null, 2)};
 
 export const VOTER_DATA = ${JSON.stringify(voterData, null, 2)};
+
+export const DEEP_DIVE = {
+  unbalanced: {
+    title: "Most Unbalanced: ${mostUnbalanced?.name ?? "N/A"} (${mostUnbalancedPct}%)",
+    text: "The \\"${mostUnbalanced?.name ?? "N/A"}\\" category has the worst imbalance with challengers winning ${mostUnbalanced?.challengerWins ?? 0} of ${mostUnbalanced?.total ?? 0} decided debates.${secondWorst ? ` ${secondWorst.name} (${secondWorstPct}%) is close behind at ${secondWorst.challengerWins}-${secondWorst.opponentWins}.` : ""} Opponents in these categories rarely win.",
+  },
+  balanced: {
+    title: "Most Balanced: ${mostBalanced?.name ?? "N/A"} (${mostBalancedPct}%)",
+    text: "${mostBalancedPct <= 50
+      ? `\\"${mostBalanced?.name ?? "N/A"}\\" is the only category where opponents lead at ${mostBalancedPct}% (${mostBalanced?.challengerWins ?? 0}-${mostBalanced?.opponentWins ?? 0} across ${mostBalanced?.total ?? 0} debates).`
+      : `\\"${mostBalanced?.name ?? "N/A"}\\" is the most balanced category at ${mostBalancedPct}% challenger (${mostBalanced?.challengerWins ?? 0}-${mostBalanced?.opponentWins ?? 0} across ${mostBalanced?.total ?? 0} debates).`}${secondBest ? ` ${secondBest.name} (${secondBestPct}%) is the next most balanced.` : ""} Every other category is ${challengerPct}%+ challenger.",
+  },
+};
+
+export const IMPLICATIONS = [
+  "The ${challengerPct}% challenger win rate across ${decided.length} decided debates suggests ${challengerPct >= 65 ? "a significant structural advantage for the initiating side" : challengerPct >= 55 ? "a moderate first-mover advantage" : "a relatively balanced platform"}. ${challengerPct >= 60 ? "Potential reforms: blind voting (hiding which side is challenger/opponent), randomized argument display order, or weighting votes by historical balance." : "The bias is within acceptable range but worth monitoring."}",
+  "Debaters can reference this data in meta-debates to argue that topics are structurally unfair, or call out specific voters for demonstrated biases. All vote data is available via the debate API for independent analysis.",
+];
 `;
 
   const path = new URL("../src/app/research/data.ts", import.meta.url);

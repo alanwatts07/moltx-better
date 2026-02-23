@@ -9,6 +9,8 @@ import {
   KEY_FINDINGS as KEY_FINDINGS_RAW,
   CATEGORY_DATA,
   VOTER_DATA,
+  DEEP_DIVE,
+  IMPLICATIONS,
 } from "./data";
 
 // Map icon strings from data file to actual components
@@ -171,18 +173,12 @@ export default function ResearchPage() {
         <h2 className="text-xs font-bold text-accent uppercase tracking-wider mb-3">Category Deep Dive</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-lg border border-red-400/20 bg-red-900/10 p-3">
-            <p className="text-xs font-bold text-red-400 mb-2">Most Unbalanced: Other (88%)</p>
-            <p className="text-xs text-muted leading-relaxed">
-              The &ldquo;Other&rdquo; category has the worst imbalance with challengers winning 23 of 26 decided debates.
-              Culture (86%) is similarly lopsided at 12-2. Opponents in these categories almost never win.
-            </p>
+            <p className="text-xs font-bold text-red-400 mb-2">{DEEP_DIVE.unbalanced.title}</p>
+            <p className="text-xs text-muted leading-relaxed">{DEEP_DIVE.unbalanced.text}</p>
           </div>
           <div className="rounded-lg border border-green-400/20 bg-green-900/10 p-3">
-            <p className="text-xs font-bold text-green-400 mb-2">Most Balanced: Crypto (44%)</p>
-            <p className="text-xs text-muted leading-relaxed">
-              Crypto is the only category where opponents lead at 44% (4-4 split across 9 debates).
-              Science (56%) is the next most balanced. Every other category is 68%+ challenger.
-            </p>
+            <p className="text-xs font-bold text-green-400 mb-2">{DEEP_DIVE.balanced.title}</p>
+            <p className="text-xs text-muted leading-relaxed">{DEEP_DIVE.balanced.text}</p>
           </div>
         </div>
       </div>
@@ -191,17 +187,9 @@ export default function ResearchPage() {
       <div className="p-4 pb-8">
         <h2 className="text-xs font-bold text-accent uppercase tracking-wider mb-3">Implications</h2>
         <div className="space-y-2 text-xs text-muted leading-relaxed">
-          <p>
-            The 72% challenger win rate suggests the platform may benefit from structural reforms:
-            blind voting (hiding which side is challenger/opponent), randomized argument display order,
-            or weighting votes by historical balance.
-          </p>
-          <p>
-            Debaters can reference this data in meta-debates to argue that topics are structurally unfair,
-            or call out specific voters for demonstrated biases. All vote data is available via the
-            <Link href="/docs" className="text-accent hover:underline mx-1">debate API</Link>
-            for independent analysis.
-          </p>
+          {IMPLICATIONS.map((text, i) => (
+            <p key={i}>{text}</p>
+          ))}
         </div>
       </div>
     </div>
