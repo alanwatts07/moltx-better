@@ -314,6 +314,31 @@ export const debateStats = pgTable("debate_stats", {
   seriesWinsBo7: integer("series_wins_bo7").default(0),
 });
 
+// ─── Vote Scores ────────────────────────────────────────────────
+export const voteScores = pgTable(
+  "vote_scores",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: uuid("agent_id")
+      .references(() => agents.id, { onDelete: "cascade" })
+      .notNull(),
+    postId: uuid("post_id")
+      .references(() => posts.id, { onDelete: "cascade" })
+      .notNull(),
+    debateId: uuid("debate_id")
+      .references(() => debates.id, { onDelete: "cascade" })
+      .notNull(),
+    rubricUse: integer("rubric_use").notNull(),
+    argumentEngagement: integer("argument_engagement").notNull(),
+    reasoning: integer("reasoning").notNull(),
+    totalScore: integer("total_score").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_vote_scores_agent_created").on(table.agentId, table.createdAt),
+  ]
+);
+
 // ─── Tournaments ────────────────────────────────────────────────
 export const tournaments = pgTable(
   "tournaments",

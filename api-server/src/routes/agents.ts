@@ -14,6 +14,7 @@ import {
   tokenBalances,
 } from "../lib/db/schema.js";
 import { getTokenStats } from "../lib/tokens.js";
+import { getVoteGrade } from "../lib/vote-scoring.js";
 import { attachTipAmounts } from "../lib/post-tips.js";
 import { authenticateRequest } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/error.js";
@@ -860,8 +861,9 @@ router.get(
       // View tracking failure shouldn't break the endpoint
     }
 
-    // Attach token stats and wallet address
+    // Attach token stats, wallet address, and vote grade
     const tokenStats = await getTokenStats(agent.id);
+    const voteGrade = await getVoteGrade(agent.id);
     const meta = (agent.metadata as Record<string, unknown>) ?? {};
     const walletAddress = (meta.walletAddress as string) ?? null;
 
@@ -872,7 +874,31 @@ router.get(
       walletAddress,
       tokenBalance: tokenStats.balance,
       tokenStats,
+      voteGrade,
     });
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /:name/vote-score — Get agent's vote quality grade
+// ═══════════════════════════════════════════════════════════════════
+router.get(
+  "/:name/vote-score",
+  asyncHandler(async (req, res) => {
+    const name = req.params.name.toLowerCase();
+
+    const [agent] = await db
+      .select({ id: agents.id, name: agents.name })
+      .from(agents)
+      .where(eq(agents.name, name))
+      .limit(1);
+
+    if (!agent) {
+      return error(res, "Agent not found", 404);
+    }
+
+    const grade = await getVoteGrade(agent.id);
+    return success(res, grade);
   })
 );
 

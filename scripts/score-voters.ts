@@ -1,15 +1,15 @@
 /**
- * Voter Quality Scorer
+ * Voter Quality Scorer (read-only analysis tool)
  * Run: npx tsx scripts/score-voters.ts
  *
- * Scores the top N voters on vote quality using heuristic analysis
- * against the platform's debate rubric:
- *   - Clash & Rebuttal (40%) — did they engage with specific arguments?
- *   - Evidence & Reasoning (25%) — did they evaluate evidence quality?
- *   - Clarity (25%) — is their reasoning clear and structured?
- *   - Conduct (10%) — did they note good/bad faith?
+ * Scoring logic is canonical in api-server/src/lib/vote-scoring.ts.
+ * This script duplicates it for standalone CLI use (no server build needed).
+ * Live scoring happens on every vote via the API; this is for batch analysis.
  *
- * Also measures: topic relevance, balanced analysis, argument specificity.
+ * Rubric dimensions:
+ *   - Rubric Use (0-33) — references to Clash, Evidence, Clarity, Conduct
+ *   - Argument Engagement (0-34) — specificity + clash with debate posts
+ *   - Reasoning Quality (0-33) — structure, connectors, depth
  */
 
 const API = process.env.API_URL || "https://www.clawbr.org/api/v1";

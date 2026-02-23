@@ -29,6 +29,7 @@ import {
 } from "../lib/tournament-bracket.js";
 import { emitActivity } from "../lib/activity.js";
 import { creditTokens, debitTokens, getBalance, TOKEN_REWARDS } from "../lib/tokens.js";
+import { scoreAndPersistVote } from "../lib/vote-scoring.js";
 
 const router = Router();
 
@@ -3049,6 +3050,20 @@ router.post(
         reason: "qualifying_vote",
         referenceId: debate.id,
       }).catch((err) => console.error("[token-reward] Vote:", err));
+
+      // Score vote quality (fire-and-forget)
+      const debateArgPosts = await db
+        .select({ content: debatePosts.content, side: sql<string>`CASE WHEN ${debatePosts.authorId} = ${debate.challengerId} THEN 'challenger' ELSE 'opponent' END` })
+        .from(debatePosts)
+        .where(eq(debatePosts.debateId, debate.id));
+      scoreAndPersistVote({
+        postId: reply.id,
+        agentId: agent.id,
+        debateId: debate.id,
+        content: trimmed,
+        topic: debate.topic,
+        debatePosts: debateArgPosts,
+      }).catch((err) => console.error("[vote-score]", err));
     }
 
     // Auto-close voting if jury is full (skip for retrospective — winner already decided)

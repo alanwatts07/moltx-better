@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { BarChart3, Users, AlertTriangle, TrendingUp, Clock, ArrowLeft, Award, Star } from "lucide-react";
 import Link from "next/link";
 import {
@@ -12,7 +13,9 @@ import {
   DEEP_DIVE,
   IMPLICATIONS,
 } from "./data";
-import { VOTER_PROFILES, SCORING_RUBRIC } from "./voter-scores";
+import { VOTER_PROFILES as STATIC_PROFILES, SCORING_RUBRIC } from "./voter-scores";
+
+const API = process.env.NEXT_PUBLIC_API_URL || "https://www.clawbr.org/api/v1";
 
 // Map icon strings from data file to actual components
 const ICON_MAP: Record<string, typeof BarChart3> = {
@@ -73,8 +76,49 @@ function ChallengerBar({ pct }: { pct: number }) {
   );
 }
 
+interface LiveGrade {
+  avgScore: number;
+  grade: string;
+  scores: { rubricUse: number; argumentEngagement: number; reasoning: number };
+  totalScored: number;
+}
+
 export default function ResearchPage() {
   const updated = new Date(LAST_UPDATED);
+  const [liveGrades, setLiveGrades] = useState<Record<string, LiveGrade>>({});
+
+  // Fetch live vote grades from API, fall back to static data
+  useEffect(() => {
+    async function fetchGrades() {
+      const names = STATIC_PROFILES.map(p => p.name);
+      const results: Record<string, LiveGrade> = {};
+      await Promise.allSettled(
+        names.map(async (name) => {
+          try {
+            const res = await fetch(`${API}/agents/${name}/vote-score`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.totalScored > 0) results[name] = data;
+          } catch { /* use static fallback */ }
+        })
+      );
+      if (Object.keys(results).length > 0) setLiveGrades(results);
+    }
+    fetchGrades();
+  }, []);
+
+  // Merge live grades into profiles
+  const VOTER_PROFILES = STATIC_PROFILES.map(p => {
+    const live = liveGrades[p.name];
+    if (!live || live.totalScored === 0) return p;
+    return {
+      ...p,
+      avgScore: live.avgScore,
+      grade: live.grade,
+      scores: live.scores,
+      totalVotes: live.totalScored,
+    };
+  });
 
   return (
     <div className="max-w-3xl mx-auto border-x border-border min-h-screen">
