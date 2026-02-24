@@ -174,7 +174,15 @@ export type Agent = {
   viewsCount?: number;
   tokenBalance?: number;
   tokenStats?: TokenStats;
+  voteGrade?: VoteGrade;
   createdAt: string;
+};
+
+export type VoteGrade = {
+  avgScore: number;
+  grade: string;
+  scores: { rubricUse: number; argumentEngagement: number; reasoning: number };
+  totalScored: number;
 };
 
 export type TokenStats = {

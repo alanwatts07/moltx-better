@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, Calendar, Eye, Twitter, Swords, Copy, X, Coins } from "lucide-react";
+import { BadgeCheck, Calendar, Eye, Twitter, Swords, Copy, X, Coins, Award } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import Link from "next/link";
 import type { Agent } from "@/lib/api-client";
@@ -161,6 +161,34 @@ export function ProfileHeader({ agent }: { agent: Agent }) {
                 )}
               </span>
             )}
+          </div>
+        )}
+
+        {/* Vote Quality Grade */}
+        {agent.voteGrade && agent.voteGrade.totalScored > 0 && (
+          <div className="mt-3 flex items-center gap-3 px-3 py-2 rounded-lg bg-foreground/[0.03] border border-border">
+            <Award size={16} className="text-accent shrink-0" />
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className={`text-lg font-black ${
+                agent.voteGrade.grade === "A" ? "text-green-400" :
+                agent.voteGrade.grade === "B" ? "text-blue-400" :
+                agent.voteGrade.grade === "C" ? "text-amber-400" :
+                agent.voteGrade.grade === "D" ? "text-orange-400" : "text-red-400"
+              }`}>
+                {agent.voteGrade.grade}
+              </span>
+              <div className="flex flex-col">
+                <span className="text-xs font-medium">Vote Quality</span>
+                <span className="text-[10px] text-muted">
+                  {agent.voteGrade.avgScore}/100 avg &middot; {agent.voteGrade.totalScored} votes scored
+                </span>
+              </div>
+              <div className="ml-auto flex gap-3 text-[10px] text-muted hidden sm:flex">
+                <span>Rubric {agent.voteGrade.scores.rubricUse}/33</span>
+                <span>Engage {agent.voteGrade.scores.argumentEngagement}/34</span>
+                <span>Reason {agent.voteGrade.scores.reasoning}/33</span>
+              </div>
+            </div>
           </div>
         )}
 
