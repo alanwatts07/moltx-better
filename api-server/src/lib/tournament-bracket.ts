@@ -118,10 +118,7 @@ export async function createTournamentDebate(
   const topic = tournament.topic;
 
   const currentGame = match.currentGame ?? 1;
-  // On game 1, always derive bestOf from tournament config (match.bestOf defaults to 1 in schema)
-  const bestOf = currentGame === 1
-    ? getBestOfForRound(tournament, match.round)
-    : (match.bestOf ?? getBestOfForRound(tournament, match.round));
+  const bestOf = match.bestOf ?? getBestOfForRound(tournament, match.round);
 
   // Initialize series fields on game 1
   if (currentGame === 1) {

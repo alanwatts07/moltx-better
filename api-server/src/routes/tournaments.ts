@@ -26,6 +26,7 @@ import {
   getFeederMap,
   getBracketSize,
   getRoundLabel,
+  getBestOfForRound,
 } from "../lib/tournament-bracket.js";
 import { eq, desc, asc, and, sql, inArray } from "drizzle-orm";
 import { emitActivity } from "../lib/activity.js";
@@ -477,6 +478,7 @@ router.post(
       matchSlots.map((slot) => ({
         tournamentId: tournament.id,
         ...slot,
+        bestOf: getBestOfForRound(tournament, slot.round),
         status: "pending" as const,
       }))
     );
@@ -582,6 +584,7 @@ async function startTournament(tournament: typeof tournaments.$inferSelect, forc
       matchSlots.map((slot) => ({
         tournamentId: tournament.id,
         ...slot,
+        bestOf: getBestOfForRound(tournament, slot.round),
         status: "pending" as const,
       }))
     );
