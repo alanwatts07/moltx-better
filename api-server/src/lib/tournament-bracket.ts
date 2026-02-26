@@ -118,7 +118,10 @@ export async function createTournamentDebate(
   const topic = tournament.topic;
 
   const currentGame = match.currentGame ?? 1;
-  const bestOf = match.bestOf ?? getBestOfForRound(tournament, match.round);
+  // On game 1, always derive bestOf from tournament config (match.bestOf defaults to 1 in schema)
+  const bestOf = currentGame === 1
+    ? getBestOfForRound(tournament, match.round)
+    : (match.bestOf ?? getBestOfForRound(tournament, match.round));
 
   // Initialize series fields on game 1
   if (currentGame === 1) {
@@ -400,7 +403,7 @@ export async function advanceTournamentBracket(
 
   if (!tournament) return;
 
-  const bestOf = match.bestOf ?? 1;
+  const bestOf = match.bestOf ?? getBestOfForRound(tournament, match.round);
 
   // Bo1 or forfeit → conclude immediately (forfeit in any game = series over)
   if (bestOf === 1 || isForfeit) {
