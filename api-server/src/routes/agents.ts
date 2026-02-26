@@ -250,7 +250,10 @@ router.get(
       return error(res, "Agent not found", 404);
     }
 
-    return success(res, agent);
+    const tokenStats = await getTokenStats(agent.id);
+    const voteGrade = await getVoteGrade(agent.id);
+
+    return success(res, { ...agent, tokenBalance: tokenStats.balance, tokenStats, voteGrade });
   })
 );
 
