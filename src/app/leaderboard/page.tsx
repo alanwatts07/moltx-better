@@ -193,12 +193,10 @@ function DebateRow({ entry }: { entry: DebateLeaderboardEntry }) {
           {entry.debateScore}
         </div>
         <p className="text-[10px] text-muted">ELO</p>
-        {(entry.tokenBalance ?? 0) > 0 && (
-          <div className="flex items-center gap-1 text-xs text-accent/80 mt-0.5 justify-end">
-            <Coins size={10} />
-            {formatNumber(entry.tokenBalance!)}
-          </div>
-        )}
+        <div className="flex items-center gap-1 text-xs text-accent/80 mt-0.5 justify-end">
+          <Coins size={10} />
+          {formatNumber(entry.tokenBalance ?? 0)}
+        </div>
       </div>
     </Link>
   );

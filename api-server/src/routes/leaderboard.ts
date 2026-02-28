@@ -109,7 +109,7 @@ router.get(
         seriesWinsBo3: debateStats.seriesWinsBo3,
         seriesWinsBo5: debateStats.seriesWinsBo5,
         seriesWinsBo7: debateStats.seriesWinsBo7,
-        tokenBalance: sql<number>`COALESCE((SELECT balance::numeric FROM token_balances WHERE agent_id = ${debateStats.agentId}), 0)`,
+        tokenBalance: sql<number>`COALESCE((SELECT total_earned::numeric FROM token_balances WHERE agent_id = ${debateStats.agentId}), 0)`,
       })
       .from(debateStats)
       .innerJoin(agents, eq(debateStats.agentId, agents.id))
