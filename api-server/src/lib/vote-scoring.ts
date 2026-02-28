@@ -11,7 +11,7 @@
 
 import { db } from "./db/index.js";
 import { voteScores } from "./db/schema.js";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 
 // ── Stop words ──────────────────────────────────────────────────
 const STOP_WORDS = new Set([
@@ -182,12 +182,63 @@ export function scoreReasoning(content: string): number {
   return Math.min(33, score);
 }
 
-/** Grade from average score */
-export function gradeFromScore(avg: number): string {
-  if (avg >= 70) return "A";
-  if (avg >= 55) return "B";
-  if (avg >= 40) return "C";
-  if (avg >= 25) return "D";
+// ── Percentile-based grading (cached) ───────────────────────────
+
+type Thresholds = { a: number; b: number; c: number; d: number };
+
+let cachedThresholds: Thresholds | null = null;
+let cacheExpiry = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/** Compute percentile score cutoffs from all judges' avg scores. */
+async function computeThresholds(): Promise<Thresholds> {
+  const rows = await db.execute(sql`
+    SELECT stats.avg_score
+    FROM agents a
+    INNER JOIN LATERAL (
+      SELECT ROUND(AVG(vs.total_score)) as avg_score
+      FROM (
+        SELECT total_score FROM vote_scores WHERE agent_id = a.id ORDER BY created_at DESC LIMIT 10
+      ) vs
+    ) stats ON true
+    WHERE a.name != 'system' AND stats.avg_score IS NOT NULL
+    ORDER BY stats.avg_score DESC
+  `);
+
+  const scores = (rows.rows as Record<string, unknown>[]).map(r => Number(r.avg_score));
+
+  if (scores.length < 3) {
+    // Too few judges — use generous fixed thresholds
+    return { a: 60, b: 45, c: 30, d: 18 };
+  }
+
+  // Percentile cutoffs: top 10% = A, top 30% = B, top 60% = C, top 85% = D, rest = F
+  const pct = (p: number) => scores[Math.max(0, Math.floor(scores.length * p) - 1)];
+  return {
+    a: pct(0.10),
+    b: pct(0.30),
+    c: pct(0.60),
+    d: pct(0.85),
+  };
+}
+
+/** Get cached percentile thresholds (refreshes every 5 min). */
+export async function getGradeThresholds(): Promise<Thresholds> {
+  const now = Date.now();
+  if (cachedThresholds && now < cacheExpiry) return cachedThresholds;
+
+  cachedThresholds = await computeThresholds();
+  cacheExpiry = now + CACHE_TTL_MS;
+  return cachedThresholds;
+}
+
+/** Grade from average score using percentile curve. */
+export async function gradeFromScore(avg: number): Promise<string> {
+  const t = await getGradeThresholds();
+  if (avg >= t.a) return "A";
+  if (avg >= t.b) return "B";
+  if (avg >= t.c) return "C";
+  if (avg >= t.d) return "D";
   return "F";
 }
 
@@ -245,7 +296,7 @@ export async function getVoteGrade(agentId: string) {
   const avgScore = avg(rows.map(r => r.totalScore));
   return {
     avgScore,
-    grade: gradeFromScore(avgScore),
+    grade: await gradeFromScore(avgScore),
     scores: {
       rubricUse: avg(rows.map(r => r.rubricUse)),
       argumentEngagement: avg(rows.map(r => r.argumentEngagement)),

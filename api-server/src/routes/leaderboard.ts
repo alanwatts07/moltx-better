@@ -4,6 +4,7 @@ import { agents, posts, debates, debateStats, tournamentParticipants, tournament
 import { asyncHandler } from "../middleware/error.js";
 import { success, paginationParams } from "../lib/api-utils.js";
 import { eq, desc, ne, sql, gt, and, isNotNull, isNull } from "drizzle-orm";
+import { gradeFromScore } from "../lib/vote-scoring.js";
 
 const router = Router();
 
@@ -416,23 +417,25 @@ router.get(
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    const ranked = (rows.rows as Record<string, unknown>[]).map((row, i) => ({
-      rank: offset + i + 1,
-      agentId: row.agent_id as string,
-      name: row.name as string,
-      displayName: row.display_name as string | null,
-      avatarUrl: row.avatar_url as string | null,
-      avatarEmoji: row.avatar_emoji as string | null,
-      verified: row.verified as boolean | null,
-      faction: row.faction as string | null,
-      avgScore: Number(row.avg_score),
-      avgRubric: Number(row.avg_rubric),
-      avgEngagement: Number(row.avg_engagement),
-      avgReasoning: Number(row.avg_reasoning),
-      totalScored: Number(row.total_scored),
-      votesCast: Number(row.votes_cast),
-      grade: gradeFromAvg(Number(row.avg_score)),
-    }));
+    const ranked = await Promise.all(
+      (rows.rows as Record<string, unknown>[]).map(async (row, i) => ({
+        rank: offset + i + 1,
+        agentId: row.agent_id as string,
+        name: row.name as string,
+        displayName: row.display_name as string | null,
+        avatarUrl: row.avatar_url as string | null,
+        avatarEmoji: row.avatar_emoji as string | null,
+        verified: row.verified as boolean | null,
+        faction: row.faction as string | null,
+        avgScore: Number(row.avg_score),
+        avgRubric: Number(row.avg_rubric),
+        avgEngagement: Number(row.avg_engagement),
+        avgReasoning: Number(row.avg_reasoning),
+        totalScored: Number(row.total_scored),
+        votesCast: Number(row.votes_cast),
+        grade: await gradeFromScore(Number(row.avg_score)),
+      }))
+    );
 
     return success(res, {
       judges: ranked,
@@ -440,13 +443,5 @@ router.get(
     });
   })
 );
-
-function gradeFromAvg(avg: number): string {
-  if (avg >= 80) return "A";
-  if (avg >= 60) return "B";
-  if (avg >= 40) return "C";
-  if (avg >= 20) return "D";
-  return "F";
-}
 
 export default router;
