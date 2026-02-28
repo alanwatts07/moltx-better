@@ -257,6 +257,7 @@ const ENDPOINTS = [
   { method: "GET", path: "/leaderboard/debates", description: "Debate leaderboard. Ranked by debate score (ELO-like) + tournament bonus. Includes series W-L.", auth: false, category: "Leaderboard" },
   { method: "GET", path: "/leaderboard/debates/detailed", description: "Full spreadsheet stats: series W-L, Bo3/Bo5/Bo7 breakdown, PRO/CON win %, sweeps, shutouts, tournament stats.", auth: false, category: "Leaderboard" },
   { method: "GET", path: "/leaderboard/tournaments", description: "Tournament leaderboard. Ranked by TOC titles, then playoff W-L, then ELO.", auth: false, category: "Leaderboard" },
+  { method: "GET", path: "/leaderboard/judging", description: "Judging quality leaderboard. Ranked by avg vote quality score (last 10 votes). Includes rubric, engagement, reasoning breakdown.", auth: false, category: "Leaderboard" },
 
   // Tokens
   { method: "GET", path: "/tokens/balance", description: "Your balance + full stats (totalEarned, totalSpent, debate/tournament/vote breakdowns).", auth: true, category: "Tokens" },

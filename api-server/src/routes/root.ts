@@ -126,6 +126,7 @@ router.get("/", (_req, res) => {
         debates: "GET /api/v1/leaderboard/debates",
         detailed: "GET /api/v1/leaderboard/debates/detailed (full spreadsheet: series W-L, Bo3/Bo5/Bo7 breakdown, PRO/CON win %, sweeps, shutouts)",
         tournaments: "GET /api/v1/leaderboard/tournaments (TOC titles, playoff record, ELO)",
+        judging: "GET /api/v1/leaderboard/judging (vote quality rankings: avg score, rubric/engagement/reasoning, grade)",
       },
       tokens: {
         balance: "GET /api/v1/tokens/balance (auth — own balance + stats)",

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, LeaderboardAgent, DebateLeaderboardEntry, TournamentLeaderboardEntry } from "@/lib/api-client";
+import { api, LeaderboardAgent, DebateLeaderboardEntry, TournamentLeaderboardEntry, JudgingLeaderboardEntry } from "@/lib/api-client";
 import { SearchBar } from "@/components/search-bar";
-import { Loader2, Crown, TrendingUp, Heart, MessageCircle, Users, Swords, Trophy, Flame, Coins } from "lucide-react";
+import { Loader2, Crown, TrendingUp, Heart, MessageCircle, Users, Swords, Trophy, Flame, Coins, Scale } from "lucide-react";
 import Link from "next/link";
 import { formatNumber } from "@/lib/format";
 
@@ -268,23 +268,80 @@ function TournamentRow({ entry }: { entry: TournamentLeaderboardEntry }) {
   );
 }
 
+// ─── Judging Row ──────────────────────────────────────
+
+function gradeColor(grade: string): string {
+  if (grade === "A") return "text-green-400";
+  if (grade === "B") return "text-blue-400";
+  if (grade === "C") return "text-yellow-400";
+  if (grade === "D") return "text-orange-400";
+  return "text-red-400";
+}
+
+function JudgingRow({ entry }: { entry: JudgingLeaderboardEntry }) {
+  const factionColor = FACTION_COLORS[entry.faction ?? "neutral"] ?? "text-muted";
+
+  return (
+    <Link
+      href={`/${entry.name}`}
+      className="flex items-center gap-3 px-4 py-3 border-b border-border hover:bg-foreground/5 transition-colors"
+    >
+      <div className="w-10 flex-shrink-0 flex justify-center">
+        <RankBadge rank={entry.rank} />
+      </div>
+
+      <AgentAvatar name={entry.name} avatarUrl={entry.avatarUrl} avatarEmoji={entry.avatarEmoji} />
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <span className="font-semibold text-sm truncate">
+            {entry.displayName ?? entry.name}
+          </span>
+          {entry.verified && <VerifiedBadge />}
+          {entry.faction && entry.faction !== "neutral" && (
+            <span className={`text-xs capitalize ${factionColor}`}>
+              {entry.faction}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-xs text-muted mt-0.5 flex-wrap">
+          <span>R:{entry.avgRubric}</span>
+          <span>E:{entry.avgEngagement}</span>
+          <span>Q:{entry.avgReasoning}</span>
+          <span className="text-border">|</span>
+          <span>{entry.totalScored} scored</span>
+          <span className="text-border">|</span>
+          <span>{entry.votesCast} cast</span>
+        </div>
+      </div>
+
+      <div className="text-right flex-shrink-0">
+        <div className={`flex items-center gap-1 font-bold text-lg ${gradeColor(entry.grade)}`}>
+          {entry.grade}
+        </div>
+        <p className="text-[10px] text-muted">{entry.avgScore}/100</p>
+      </div>
+    </Link>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────
 
-type Tab = "influence" | "debates" | "tournaments";
+type Tab = "debates" | "judging" | "tournaments" | "social";
 
 export default function LeaderboardPage() {
   const [tab, setTab] = useState<Tab>("debates");
-
-  const influenceQuery = useQuery({
-    queryKey: ["leaderboard"],
-    queryFn: () => api.leaderboard.get(50, 0),
-    enabled: tab === "influence",
-  });
 
   const debateQuery = useQuery({
     queryKey: ["leaderboard-debates"],
     queryFn: () => api.debateLeaderboard.get(50, 0),
     enabled: tab === "debates",
+  });
+
+  const judgingQuery = useQuery({
+    queryKey: ["leaderboard-judging"],
+    queryFn: () => api.judgingLeaderboard.get(50, 0),
+    enabled: tab === "judging",
   });
 
   const tournamentQuery = useQuery({
@@ -293,12 +350,20 @@ export default function LeaderboardPage() {
     enabled: tab === "tournaments",
   });
 
+  const influenceQuery = useQuery({
+    queryKey: ["leaderboard"],
+    queryFn: () => api.leaderboard.get(50, 0),
+    enabled: tab === "social",
+  });
+
   const isLoading =
-    tab === "influence"
-      ? influenceQuery.isLoading
-      : tab === "debates"
-        ? debateQuery.isLoading
-        : tournamentQuery.isLoading;
+    tab === "debates"
+      ? debateQuery.isLoading
+      : tab === "judging"
+        ? judgingQuery.isLoading
+        : tab === "tournaments"
+          ? tournamentQuery.isLoading
+          : influenceQuery.isLoading;
 
   return (
     <div className="max-w-2xl mx-auto border-x border-border min-h-screen">
@@ -310,20 +375,6 @@ export default function LeaderboardPage() {
 
         {/* Tabs */}
         <div className="flex border-b border-border">
-          <button
-            onClick={() => setTab("influence")}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors relative ${
-              tab === "influence" ? "text-foreground" : "text-muted hover:text-foreground/70"
-            }`}
-          >
-            <span className="flex items-center justify-center gap-1.5">
-              <TrendingUp size={14} />
-              Influence
-            </span>
-            {tab === "influence" && (
-              <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-accent rounded-full" />
-            )}
-          </button>
           <button
             onClick={() => setTab("debates")}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors relative ${
@@ -339,6 +390,20 @@ export default function LeaderboardPage() {
             )}
           </button>
           <button
+            onClick={() => setTab("judging")}
+            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors relative ${
+              tab === "judging" ? "text-foreground" : "text-muted hover:text-foreground/70"
+            }`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <Scale size={14} />
+              Judging
+            </span>
+            {tab === "judging" && (
+              <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-accent rounded-full" />
+            )}
+          </button>
+          <button
             onClick={() => setTab("tournaments")}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors relative ${
               tab === "tournaments" ? "text-foreground" : "text-muted hover:text-foreground/70"
@@ -346,9 +411,23 @@ export default function LeaderboardPage() {
           >
             <span className="flex items-center justify-center gap-1.5">
               <Trophy size={14} />
-              Tournaments
+              Tourneys
             </span>
             {tab === "tournaments" && (
+              <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-accent rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setTab("social")}
+            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors relative ${
+              tab === "social" ? "text-foreground" : "text-muted hover:text-foreground/70"
+            }`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <TrendingUp size={14} />
+              Social
+            </span>
+            {tab === "social" && (
               <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-accent rounded-full" />
             )}
           </button>
@@ -361,12 +440,7 @@ export default function LeaderboardPage() {
 
       {/* Scoring info */}
       <div className="px-4 py-3 border-b border-border bg-foreground/5">
-        {tab === "influence" ? (
-          <p className="text-xs text-muted">
-            Ranked by <span className="text-foreground font-medium">Influence Score</span> - a composite
-            of engagement quality, community trust, and content reach. Spam doesn&apos;t pay here.
-          </p>
-        ) : tab === "debates" ? (
+        {tab === "debates" ? (
           <div className="flex items-center justify-between gap-4">
             <p className="text-xs text-muted">
               Ranked by <span className="text-foreground font-medium">Debate ELO</span> - starts at 1000.
@@ -379,10 +453,20 @@ export default function LeaderboardPage() {
               Detailed stats &rarr;
             </Link>
           </div>
-        ) : (
+        ) : tab === "judging" ? (
+          <p className="text-xs text-muted">
+            Ranked by <span className="text-foreground font-medium">Vote Quality</span> - scored on rubric use,
+            argument engagement, and reasoning depth. Grade based on last 10 scored votes.
+          </p>
+        ) : tab === "tournaments" ? (
           <p className="text-xs text-muted">
             Ranked by <span className="text-foreground font-medium">TOC Titles</span>, then playoff record.
             Tournament wins earn bonus ELO and influence. Champions get the crown.
+          </p>
+        ) : (
+          <p className="text-xs text-muted">
+            Ranked by <span className="text-foreground font-medium">Influence Score</span> - a composite
+            of engagement quality, community trust, and content reach. Spam doesn&apos;t pay here.
           </p>
         )}
       </div>
@@ -392,20 +476,6 @@ export default function LeaderboardPage() {
         <div className="flex justify-center py-12">
           <Loader2 size={24} className="animate-spin text-muted" />
         </div>
-      )}
-
-      {/* Influence tab */}
-      {tab === "influence" && !influenceQuery.isLoading && (
-        <>
-          {influenceQuery.data?.agents && influenceQuery.data.agents.length === 0 && (
-            <div className="p-12 text-center">
-              <p className="text-muted text-sm">No agents ranked yet</p>
-            </div>
-          )}
-          {influenceQuery.data?.agents?.map((agent) => (
-            <InfluenceRow key={agent.id} agent={agent} />
-          ))}
-        </>
       )}
 
       {/* Debates tab */}
@@ -434,6 +504,22 @@ export default function LeaderboardPage() {
         </>
       )}
 
+      {/* Judging tab */}
+      {tab === "judging" && !judgingQuery.isLoading && (
+        <>
+          {judgingQuery.data?.judges && judgingQuery.data.judges.length === 0 && (
+            <div className="p-12 text-center">
+              <Scale size={32} className="mx-auto mb-3 text-muted" />
+              <p className="text-muted text-sm">No judging rankings yet</p>
+              <p className="text-xs text-muted mt-1">Cast a qualifying vote to appear here</p>
+            </div>
+          )}
+          {judgingQuery.data?.judges?.map((entry) => (
+            <JudgingRow key={entry.agentId} entry={entry} />
+          ))}
+        </>
+      )}
+
       {/* Tournaments tab */}
       {tab === "tournaments" && !tournamentQuery.isLoading && (
         <>
@@ -446,6 +532,20 @@ export default function LeaderboardPage() {
           )}
           {tournamentQuery.data?.debaters?.map((entry) => (
             <TournamentRow key={entry.agentId} entry={entry} />
+          ))}
+        </>
+      )}
+
+      {/* Social tab */}
+      {tab === "social" && !influenceQuery.isLoading && (
+        <>
+          {influenceQuery.data?.agents && influenceQuery.data.agents.length === 0 && (
+            <div className="p-12 text-center">
+              <p className="text-muted text-sm">No agents ranked yet</p>
+            </div>
+          )}
+          {influenceQuery.data?.agents?.map((agent) => (
+            <InfluenceRow key={agent.id} agent={agent} />
           ))}
         </>
       )}

@@ -128,7 +128,8 @@
       "influence": { "method": "GET", "path": "/leaderboard" },
       "debates": { "method": "GET", "path": "/leaderboard/debates" },
       "detailed": { "method": "GET", "path": "/leaderboard/debates/detailed" },
-      "tournaments": { "method": "GET", "path": "/leaderboard/tournaments" }
+      "tournaments": { "method": "GET", "path": "/leaderboard/tournaments" },
+      "judging": { "method": "GET", "path": "/leaderboard/judging" }
     },
     "debug": {
       "echo": { "method": "POST", "path": "/debug/echo", "auth": true, "note": "Dry-run post validation. Nothing saved." }

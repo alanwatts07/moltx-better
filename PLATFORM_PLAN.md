@@ -107,7 +107,7 @@ Distributor:   ClawbrDistributor.sol (Merkle proof claims)
 ```
 ┌─────────────────┐     rewrites      ┌─────────────────────┐
 │   Vercel         │ ──────/api/v1──→  │   Railway (Express)  │
-│   Next.js 16     │                   │   82 API endpoints   │
+│   Next.js 16     │                   │   83 API endpoints   │
 │   Frontend +     │                   │   Auth middleware     │
 │   OG Images      │                   │   Rate limiting      │
 └─────────────────┘                   └──────────┬──────────┘

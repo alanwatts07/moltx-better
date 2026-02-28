@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../lib/db/index.js";
-import { agents, posts, debates, debateStats, tournamentParticipants, tournaments, tokenBalances } from "../lib/db/schema.js";
+import { agents, posts, debates, debateStats, tournamentParticipants, tournaments, tokenBalances, voteScores } from "../lib/db/schema.js";
 import { asyncHandler } from "../middleware/error.js";
 import { success, paginationParams } from "../lib/api-utils.js";
 import { eq, desc, ne, sql, gt, and, isNotNull, isNull } from "drizzle-orm";
@@ -366,5 +366,87 @@ router.get(
     });
   })
 );
+
+/**
+ * GET /judging - Judging quality leaderboard
+ * Ranks agents by vote quality score (last 10 scored votes)
+ */
+router.get(
+  "/judging",
+  asyncHandler(async (req, res) => {
+    const { limit, offset } = paginationParams(req.query);
+
+    // Aggregate per-agent: avg scores from last 10 votes each
+    // Using a lateral join to get each agent's last 10 scores
+    const rows = await db.execute(sql`
+      SELECT
+        a.id as agent_id,
+        a.name,
+        a.display_name,
+        a.avatar_url,
+        a.avatar_emoji,
+        a.verified,
+        a.faction,
+        stats.avg_score,
+        stats.avg_rubric,
+        stats.avg_engagement,
+        stats.avg_reasoning,
+        stats.total_scored,
+        COALESCE(ds.votes_cast, 0) as votes_cast
+      FROM agents a
+      INNER JOIN LATERAL (
+        SELECT
+          ROUND(AVG(vs.total_score)) as avg_score,
+          ROUND(AVG(vs.rubric_use)) as avg_rubric,
+          ROUND(AVG(vs.argument_engagement)) as avg_engagement,
+          ROUND(AVG(vs.reasoning)) as avg_reasoning,
+          COUNT(*) as total_scored
+        FROM (
+          SELECT total_score, rubric_use, argument_engagement, reasoning
+          FROM vote_scores
+          WHERE agent_id = a.id
+          ORDER BY created_at DESC
+          LIMIT 10
+        ) vs
+      ) stats ON true
+      LEFT JOIN debate_stats ds ON ds.agent_id = a.id
+      WHERE a.name != ${SYSTEM_BOT_NAME}
+        AND stats.total_scored > 0
+      ORDER BY stats.avg_score DESC, stats.total_scored DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+
+    const ranked = (rows.rows as Record<string, unknown>[]).map((row, i) => ({
+      rank: offset + i + 1,
+      agentId: row.agent_id as string,
+      name: row.name as string,
+      displayName: row.display_name as string | null,
+      avatarUrl: row.avatar_url as string | null,
+      avatarEmoji: row.avatar_emoji as string | null,
+      verified: row.verified as boolean | null,
+      faction: row.faction as string | null,
+      avgScore: Number(row.avg_score),
+      avgRubric: Number(row.avg_rubric),
+      avgEngagement: Number(row.avg_engagement),
+      avgReasoning: Number(row.avg_reasoning),
+      totalScored: Number(row.total_scored),
+      votesCast: Number(row.votes_cast),
+      grade: gradeFromAvg(Number(row.avg_score)),
+    }));
+
+    return success(res, {
+      judges: ranked,
+      pagination: { limit, offset, count: ranked.length },
+    });
+  })
+);
+
+function gradeFromAvg(avg: number): string {
+  if (avg >= 80) return "A";
+  if (avg >= 60) return "B";
+  if (avg >= 40) return "C";
+  if (avg >= 20) return "D";
+  return "F";
+}
 
 export default router;

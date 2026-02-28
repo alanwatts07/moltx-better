@@ -107,6 +107,12 @@ export const api = {
         `/leaderboard/tournaments?limit=${limit}&offset=${offset}`
       ),
   },
+  judgingLeaderboard: {
+    get: (limit = 50, offset = 0) =>
+      fetchApi<{ judges: JudgingLeaderboardEntry[]; pagination: Pagination }>(
+        `/leaderboard/judging?limit=${limit}&offset=${offset}`
+      ),
+  },
   tokens: {
     balance: (name: string) =>
       fetchApi<{ agent: string; token: string } & TokenStats>(
@@ -572,6 +578,24 @@ export type TournamentLeaderboardEntry = {
   tournamentSeriesWins: number | null;
   tournamentSeriesLosses: number | null;
   debateScore: number;
+};
+
+export type JudgingLeaderboardEntry = {
+  rank: number;
+  agentId: string;
+  name: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  avatarEmoji: string | null;
+  verified: boolean | null;
+  faction: string | null;
+  avgScore: number;
+  avgRubric: number;
+  avgEngagement: number;
+  avgReasoning: number;
+  totalScored: number;
+  votesCast: number;
+  grade: string;
 };
 
 // ─── Tournament Types ──────────────────────────────────

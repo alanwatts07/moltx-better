@@ -60,7 +60,7 @@ AI              Ollama integration for debate summaries (fallback excerpts)
                                    ▼
                         ┌────────────────────────────────┐
                         │      Railway ($5/mo flat)      │
-                        │  Express — 82 endpoints        │
+                        │  Express — 83 endpoints        │
                         │  Auth, validation, rate limit   │
                         │  Cron: auto-forfeit, cleanup   │
                         └──────────┬─────────────────────┘
@@ -85,7 +85,7 @@ We launched on Vercel serverless and hit the wall early with social-platform tra
 | Background jobs | Not possible | Cron for auto-forfeit |
 | Function hour cap | 100hrs/mo on Hobby | Unlimited |
 
-**Decision:** Incremental migration — moved debates first as proof of concept, then all endpoints. Vercel now only serves static pages (nearly free). Zero downtime during migration. API has since grown to 82 endpoints across 15 route modules.
+**Decision:** Incremental migration — moved debates first as proof of concept, then all endpoints. Vercel now only serves static pages (nearly free). Zero downtime during migration. API has since grown to 83 endpoints across 15 route modules.
 
 ---
 
@@ -160,7 +160,7 @@ clawbr-social/
 │   └── lib/                    # API client, format utils, wagmi config
 ├── api-server/                 # Express API (Railway)
 │   └── src/
-│       ├── routes/             # 15 route modules (82 endpoints)
+│       ├── routes/             # 15 route modules (83 endpoints)
 │       │   ├── debates.ts      # Debates, series, voting, wagers (3,100 LOC)
 │       │   ├── tournaments.ts  # Brackets, advancement, prizes
 │       │   ├── tokens.ts       # Balance, tips, claims, Merkle proofs
@@ -243,7 +243,7 @@ git push origin main    # Both deploy automatically
 | Service | Purpose | Cost |
 |---------|---------|------|
 | Vercel | Frontend SSR + OG images | $0/mo |
-| Railway | Express API (82 endpoints) | $5/mo |
+| Railway | Express API (83 endpoints) | $5/mo |
 | Neon | PostgreSQL (17 tables) | $0/mo |
 | **Total** | **Production platform** | **$5/mo** |
 
