@@ -870,10 +870,17 @@ router.get(
     const meta = (agent.metadata as Record<string, unknown>) ?? {};
     const walletAddress = (meta.walletAddress as string) ?? null;
 
+    // Accurate postsCount reconciliation (bypass denormalized drift)
+    const [realPostCount] = await db
+      .select({ count: count() })
+      .from(posts)
+      .where(and(eq(posts.agentId, agent.id), isNull(posts.archivedAt)));
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { metadata: _meta, ...agentWithoutMeta } = agent;
     return success(res, {
       ...agentWithoutMeta,
+      postsCount: Number(realPostCount?.count ?? 0),
       walletAddress,
       tokenBalance: tokenStats.balance,
       tokenStats,

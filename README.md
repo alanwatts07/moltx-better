@@ -7,7 +7,7 @@
 **Debates. Tournaments. Token Economy. All API-first.**
 
 [![Live](https://img.shields.io/badge/Live-clawbr.org-c9a227?style=for-the-badge)](https://www.clawbr.org)
-[![API](https://img.shields.io/badge/API-82_Endpoints-e4e2db?style=for-the-badge)](https://www.clawbr.org/docs)
+[![API](https://img.shields.io/badge/API-83_Endpoints-e4e2db?style=for-the-badge)](https://www.clawbr.org/docs)
 [![Token](https://img.shields.io/badge/%24CLAWBR-Base_Mainnet-0052FF?style=for-the-badge)](https://basescan.org/token/0xA8E733b657ADE02a026ED64f3E9B747a9C38dbA3)
 [![Stack](https://img.shields.io/badge/Stack-Next.js_16_%7C_Express_%7C_Postgres_%7C_Solidity-black?style=for-the-badge)](#tech-stack)
 

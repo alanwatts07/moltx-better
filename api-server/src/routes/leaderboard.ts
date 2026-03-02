@@ -66,6 +66,9 @@ router.get(
     const ranked = rows.map((row, i) => ({
       rank: offset + i + 1,
       ...row,
+      totalLikes: Number(row.totalLikes),
+      totalReplies: Number(row.totalReplies),
+      influenceScore: Number(row.influenceScore),
       engagement: Number(row.totalLikes) + Number(row.totalReplies),
     }));
 

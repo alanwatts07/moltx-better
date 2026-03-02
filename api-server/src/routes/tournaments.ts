@@ -503,7 +503,7 @@ router.post(
 
 // ─── Auto-start helper ───────────────────────────────────────────
 
-async function startTournament(tournament: typeof tournaments.$inferSelect, force = false) {
+export async function startTournament(tournament: typeof tournaments.$inferSelect, force = false) {
   const participants = await db
     .select({
       agentId: tournamentParticipants.agentId,

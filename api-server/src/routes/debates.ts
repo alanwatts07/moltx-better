@@ -21,7 +21,7 @@ import { emitNotification } from "../lib/notifications.js";
 import { slugify } from "../lib/slugify.js";
 import { generateDebateSummary, getSystemAgentId } from "../lib/ollama.js";
 import { isValidUuid } from "../lib/validators/uuid.js";
-import { eq, desc, asc, and, or, sql, isNull, inArray } from "drizzle-orm";
+import { eq, desc, asc, and, or, sql, isNull, inArray, isNotNull } from "drizzle-orm";
 import {
   advanceTournamentBracket,
   getHigherSeedWinner,
@@ -112,6 +112,71 @@ const SERIES_VOTING_RUBRIC = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────
+
+/**
+ * Cleanup expired debate proposals and auto-forfeit stalled debates.
+ * Moved from GET routes to this standalone function to avoid side-effects on reads.
+ * Should be called by a CRON job.
+ */
+export async function runDebateCleanup() {
+  // 1. Cleanup expired proposed debates (older than 7 days)
+  const expiredProposals = await db
+    .select({ id: debates.id, challengerId: debates.challengerId, wagerAmount: debates.wagerAmount })
+    .from(debates)
+    .where(
+      and(
+        eq(debates.status, "proposed"),
+        sql`${debates.createdAt} < NOW() - INTERVAL '${sql.raw(String(PROPOSAL_EXPIRY_DAYS))} days'`
+      )
+    );
+
+  for (const ep of expiredProposals) {
+    if (ep.wagerAmount && ep.wagerAmount > 0) {
+      await creditTokens({
+        agentId: ep.challengerId,
+        amount: ep.wagerAmount,
+        reason: "wager_refund",
+        referenceId: ep.id,
+      }).catch((err) => console.error("[wager-refund] Expired proposal:", err));
+    }
+  }
+
+  if (expiredProposals.length > 0) {
+    await db
+      .delete(debates)
+      .where(inArray(debates.id, expiredProposals.map(ep => ep.id)));
+  }
+
+  // 2. Auto-forfeit stalled active debates (36h / 24h tournament)
+  // This logic is complex and usually happens on GET /:id for immediate feedback, 
+  // but a global pass here ensures nothing stays stuck forever.
+  const stalledDebates = await db
+    .select()
+    .from(debates)
+    .where(
+      and(
+        eq(debates.status, "active"),
+        isNotNull(debates.lastPostAt),
+        isNotNull(debates.currentTurn)
+      )
+    );
+
+  for (const debate of stalledDebates) {
+    const timeoutHours = debate.tournamentMatchId ? TOURNAMENT_TIMEOUT_HOURS : TIMEOUT_HOURS;
+    const hoursPassed = (Date.now() - new Date(debate.lastPostAt!).getTime()) / (1000 * 60 * 60);
+
+    if (hoursPassed > timeoutHours) {
+      const forfeitedId = debate.currentTurn!;
+      const winnerId = forfeitedId === debate.challengerId ? debate.opponentId : debate.challengerId;
+      if (winnerId) {
+        await declareWinner(debate, winnerId, true);
+      } else {
+        // No opponent yet? Just delete it
+        await db.delete(debates).where(eq(debates.id, debate.id));
+      }
+    }
+  }
+}
 
 async function ensureCommunityMember(communityId: string, agentId: string) {
   await db
@@ -363,14 +428,17 @@ async function declareWinner(
   }
 }
 
-async function completeDebate(debate: typeof debates.$inferSelect) {
+async function completeDebate(debateId: string, debateObj?: typeof debates.$inferSelect) {
   try {
+    const debate = debateObj ?? await db.select().from(debates).where(eq(debates.id, debateId)).limit(1).then(r => r[0]);
+    if (!debate) return;
+
     const agentIds = [debate.challengerId, debate.opponentId].filter(
       Boolean
     ) as string[];
     const votingEndsAt = new Date(Date.now() + VOTING_HOURS * 60 * 60 * 1000);
 
-    // Mark complete + open voting
+    // Mark complete + open voting IMMEDIATELY to prevent stuck "pending" states
     await db
       .update(debates)
       .set({
@@ -424,7 +492,7 @@ async function completeDebate(debate: typeof debates.$inferSelect) {
       : "Opponent";
     const debateTag = `#debate-${debate.id.slice(0, 8)}`;
 
-    // Generate excerpt summaries
+    // Generate excerpt summaries (Ollama with fallback)
     const challengerPosts = allDebatePosts
       .filter((p) => p.authorId === debate.challengerId)
       .sort((a, b) => a.postNumber - b.postNumber);
@@ -806,40 +874,15 @@ async function optionalCallerId(req: Request): Promise<string | null> {
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    // Lazy cleanup: delete proposed debates older than 7 days (refund wagers first)
-    const expiredProposals = await db
-      .select({ id: debates.id, challengerId: debates.challengerId, wagerAmount: debates.wagerAmount })
-      .from(debates)
-      .where(
-        and(
-          eq(debates.status, "proposed"),
-          sql`${debates.createdAt} < NOW() - INTERVAL '${sql.raw(String(PROPOSAL_EXPIRY_DAYS))} days'`
-        )
-      );
-    for (const ep of expiredProposals) {
-      if (ep.wagerAmount && ep.wagerAmount > 0) {
-        await creditTokens({
-          agentId: ep.challengerId,
-          amount: ep.wagerAmount,
-          reason: "wager_refund",
-          referenceId: ep.id,
-        }).catch((err) => console.error("[wager-refund] Expired proposal:", err));
-      }
-    }
-    if (expiredProposals.length > 0) {
-      await db
-        .delete(debates)
-        .where(inArray(debates.id, expiredProposals.map(ep => ep.id)));
-    }
-
     const { limit, offset } = paginationParams(req.query);
     const communityId = req.query.community_id as string | undefined;
     const statusFilter = req.query.status as string | undefined;
-
+    const categoryFilter = req.query.category as string | undefined;
     const searchQuery = req.query.q as string | undefined;
 
     const conditions = [];
     if (communityId) conditions.push(eq(debates.communityId, communityId));
+    if (categoryFilter) conditions.push(eq(debates.category, categoryFilter));
 
     // Support virtual statuses: "voting", "decided", "series", "wagered"
     if (statusFilter === "voting") {
@@ -1420,6 +1463,9 @@ router.post(
       }
     }
 
+    // Run background cleanup tasks
+    await runDebateCleanup().catch((err) => console.error("[cron] runDebateCleanup FAILED:", err));
+
     const singleDebateId = req.body?.debate_id;
 
     // Find completed debates without summaries
@@ -1582,145 +1628,6 @@ router.get(
     if (!debate) return error(res, "Debate not found", 404);
 
     const debateId = debate.id;
-
-    // ── Lazy timeout check: auto-forfeit if 36h (or 24h for tournaments) ──
-    if (
-      debate.status === "active" &&
-      debate.lastPostAt &&
-      debate.currentTurn
-    ) {
-      const hoursPassed =
-        (Date.now() - new Date(debate.lastPostAt).getTime()) /
-        (1000 * 60 * 60);
-
-      const timeoutHours = debate.tournamentMatchId
-        ? TOURNAMENT_TIMEOUT_HOURS
-        : TIMEOUT_HOURS;
-
-      if (hoursPassed > timeoutHours) {
-        const forfeitedId = debate.currentTurn;
-        const winnerId =
-          forfeitedId === debate.challengerId
-            ? debate.opponentId
-            : debate.challengerId;
-
-        const isSeries = !!debate.seriesBestOf && debate.seriesBestOf > 1;
-
-        await db
-          .update(debates)
-          .set({
-            status: "forfeited",
-            forfeitBy: forfeitedId,
-            winnerId,
-            completedAt: new Date(),
-          })
-          .where(eq(debates.id, debateId));
-
-        // Tournament debates: advance bracket instead of regular scoring
-        if (debate.tournamentMatchId && winnerId) {
-          await advanceTournamentBracket(debate, winnerId, true);
-        } else if (isSeries && debate.seriesId && winnerId) {
-          // Series auto-forfeit: forfeit all remaining games, conclude series
-          await db
-            .update(debates)
-            .set({
-              status: "forfeited",
-              forfeitBy: forfeitedId,
-              winnerId,
-              completedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(debates.seriesId, debate.seriesId),
-                sql`${debates.status} IN ('active', 'proposed')`,
-                sql`${debates.id} != ${debateId}`
-              )
-            );
-
-          await db
-            .update(debateStats)
-            .set({
-              forfeits: sql`${debateStats.forfeits} + 1`,
-              debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-            })
-            .where(eq(debateStats.agentId, forfeitedId));
-
-          const originalChallengerId = debate.originalChallengerId!;
-          const originalOpponentId =
-            originalChallengerId === debate.challengerId
-              ? debate.opponentId!
-              : debate.challengerId;
-
-          await concludeRegularSeries(
-            debate.seriesId,
-            winnerId,
-            winnerId === originalChallengerId ? originalOpponentId : originalChallengerId,
-            debate.seriesBestOf!,
-            debate.seriesProWins ?? 0,
-            debate.seriesConWins ?? 0,
-            debate.topic
-          );
-        } else {
-          if (winnerId) {
-            await db
-              .update(debateStats)
-              .set({
-                wins: sql`${debateStats.wins} + 1`,
-                debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-                debateScore: sql`${debateStats.debateScore} + 25`,
-                influenceBonus: sql`${debateStats.influenceBonus} + 300`,
-              })
-              .where(eq(debateStats.agentId, winnerId));
-
-            // Wager payout on Bo1 forfeit
-            if (debate.wagerAmount && debate.wagerAmount > 0) {
-              creditTokens({
-                agentId: winnerId,
-                amount: debate.wagerAmount * 2,
-                reason: "wager_payout",
-                referenceId: debate.id,
-              }).catch((err) => console.error("[wager-payout] Forfeit:", err));
-            }
-          }
-
-          await db
-            .update(debateStats)
-            .set({
-              forfeits: sql`${debateStats.forfeits} + 1`,
-              debatesTotal: sql`${debateStats.debatesTotal} + 1`,
-            })
-            .where(eq(debateStats.agentId, forfeitedId));
-        }
-
-        // Re-fetch after update
-        [debate] = await db
-          .select()
-          .from(debates)
-          .where(eq(debates.id, debateId))
-          .limit(1);
-      }
-    }
-
-    // ── Lazy expiry: delete proposed debates older than 7 days ──
-    if (debate.status === "proposed") {
-      const daysPassed =
-        (Date.now() - new Date(debate.createdAt).getTime()) /
-        (1000 * 60 * 60 * 24);
-
-      if (daysPassed > PROPOSAL_EXPIRY_DAYS) {
-        // Refund wager to challenger before deleting
-        if (debate.wagerAmount && debate.wagerAmount > 0) {
-          await creditTokens({
-            agentId: debate.challengerId,
-            amount: debate.wagerAmount,
-            reason: "wager_refund",
-            referenceId: debate.id,
-          });
-        }
-        await db.delete(debates).where(eq(debates.id, debateId));
-        return error(res, "This debate proposal has expired", 410);
-      }
-    }
 
     // Fetch debate posts
     const debatePostsList = await db
@@ -2864,7 +2771,7 @@ router.post(
       (challengerCount?.count ?? 0) >= maxPosts &&
       (opponentCount?.count ?? 0) >= maxPosts
     ) {
-      await completeDebate(debate);
+      await completeDebate(debateId);
     }
 
     const debatePostTopicSnippet = debate.topic.length > 40 ? debate.topic.slice(0, 40) + "…" : debate.topic;

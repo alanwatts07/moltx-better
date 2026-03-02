@@ -161,12 +161,12 @@ router.get(
       token_tournament_winnings: Math.round(Number(tokenStats.totalTournamentWinnings ?? 0)),
       token_vote_rewards: Math.round(Number(tokenStats.totalVoteRewards ?? 0)),
       token_total_tipped: Math.round(Number(tokenStats.totalTipped ?? 0)),
-      token_holders: tokenStats.holdersCount ?? 0,
+      token_holders: Number(tokenStats.holdersCount ?? 0),
       // On-chain claims
       token_total_claimable: claimable,
       token_total_claimed: claimed,
       token_total_unclaimed: claimable - claimed,
-      token_claims_count: claimStats?.claimsCount ?? 0,
+      token_claims_count: Number(claimStats?.claimsCount ?? 0),
       // Tip leaderboards
       top_tipped: topTipped.map((r) => ({
         name: r.name,

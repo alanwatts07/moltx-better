@@ -216,65 +216,46 @@ function VisualBracket({ matches }: { matches: TournamentMatch[] }) {
   rounds.push({ label: "Final", matches: final });
 
   return (
-    <>
-      {/* Desktop: horizontal bracket with staggered alignment */}
-      <div className="hidden md:block overflow-x-auto pb-4">
-        {/* Round labels row */}
-        <div className="flex gap-3 px-4 pt-4" style={{ minWidth: `${rounds.length * 170}px` }}>
-          {rounds.map((round, ri) => (
-            <div key={round.label} className="contents">
-              <div className="flex-1 min-w-[140px]">
-                <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center">
-                  {round.label}
-                </p>
-              </div>
-              {ri < rounds.length - 1 && <div className="w-4 shrink-0" />}
+    <div className="overflow-x-auto pb-4">
+      {/* Round labels row */}
+      <div className="flex gap-3 px-4 pt-4" style={{ minWidth: `${rounds.length * 150}px` }}>
+        {rounds.map((round, ri) => (
+          <div key={round.label} className="contents">
+            <div className="flex-1 min-w-[130px]">
+              <p className="text-[10px] text-muted uppercase tracking-wider font-bold text-center">
+                {round.label}
+              </p>
             </div>
-          ))}
-        </div>
-        {/* Bracket body — first column sets height, later columns center within it */}
-        <div className="flex items-stretch gap-3 px-4 pb-4 pt-2" style={{ minWidth: `${rounds.length * 170}px` }}>
-          {rounds.map((round, ri) => (
-            <div key={round.label} className="contents">
-              <div className={`flex flex-col flex-1 min-w-[140px] ${ri === 0 ? "gap-3" : "justify-around"}`}>
-                {round.matches.map((m) => (
-                  <MatchCard key={m.id} match={m} />
-                ))}
-              </div>
-
-              {/* Connector lines */}
-              {ri < rounds.length - 1 && (
-                <div className="flex flex-col justify-around w-4 shrink-0">
-                  {Array.from({ length: Math.ceil(round.matches.length / 2) }).map((_, i) => (
-                    <div key={i} className="flex flex-col items-center" style={{ height: `${100 / Math.ceil(round.matches.length / 2)}%` }}>
-                      <div className="w-px flex-1 bg-border" />
-                      <div className="w-4 h-px bg-border" />
-                      <div className="w-px flex-1 bg-border" />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+            {ri < rounds.length - 1 && <div className="w-4 shrink-0" />}
+          </div>
+        ))}
       </div>
-
-      {/* Mobile: stacked rounds */}
-      <div className="md:hidden px-4 py-4 space-y-6">
-        {rounds.map((round) => (
-          <div key={round.label}>
-            <p className="text-[10px] text-muted uppercase tracking-wider font-bold mb-2">
-              {round.label}
-            </p>
-            <div className="grid grid-cols-2 gap-2">
+      {/* Bracket body — first column sets height, later columns center within it */}
+      <div className="flex items-stretch gap-3 px-4 pb-4 pt-2" style={{ minWidth: `${rounds.length * 150}px` }}>
+        {rounds.map((round, ri) => (
+          <div key={round.label} className="contents">
+            <div className={`flex flex-col flex-1 min-w-[130px] ${ri === 0 ? "gap-3" : "justify-around"}`}>
               {round.matches.map((m) => (
                 <MatchCard key={m.id} match={m} />
               ))}
             </div>
+
+            {/* Connector lines */}
+            {ri < rounds.length - 1 && (
+              <div className="flex flex-col justify-around w-4 shrink-0">
+                {Array.from({ length: Math.ceil(round.matches.length / 2) }).map((_, i) => (
+                  <div key={i} className="flex flex-col items-center" style={{ height: `${100 / Math.ceil(round.matches.length / 2)}%` }}>
+                    <div className="w-px flex-1 bg-border" />
+                    <div className="w-4 h-px bg-border" />
+                    <div className="w-px flex-1 bg-border" />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
-    </>
+    </div>
   );
 }
 
