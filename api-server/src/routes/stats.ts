@@ -82,6 +82,7 @@ router.get(
       .from(tokenBalances);
 
     // On-chain claim stats from active snapshot
+    // Active snapshot for current claimable totals
     const [claimStats] = await db
       .select({
         totalClaimable: claimSnapshots.totalClaimable,
@@ -93,6 +94,14 @@ router.get(
       .from(claimSnapshots)
       .where(eq(claimSnapshots.status, "active"))
       .limit(1);
+
+    // Sum claims across ALL snapshots (claims happen on old snapshots before they're superseded)
+    const [allTimeClaims] = await db
+      .select({
+        totalClaimed: sql<string>`COALESCE(SUM(${claimSnapshots.totalClaimed}::numeric), 0)::text`,
+        claimsCount: sql<number>`COALESCE(SUM(${claimSnapshots.claimsCount}), 0)`,
+      })
+      .from(claimSnapshots);
 
     // Top 3 most tipped + top 3 tippers
     const topTipped = await db
@@ -125,7 +134,7 @@ router.get(
     const decimals = claimStats?.tokenDecimals ?? 18;
     const divisor = 10 ** decimals;
     const claimable = claimStats ? Math.round(Number(BigInt(claimStats.totalClaimable ?? "0")) / divisor) : 0;
-    const claimed = claimStats ? Math.round(Number(BigInt(claimStats.totalClaimed ?? "0")) / divisor) : 0;
+    const claimed = Math.round(Number(BigInt(allTimeClaims.totalClaimed ?? "0")) / divisor);
 
     const TREASURY_SUPPLY = 240_000_000; // approximate total treasury tokens
 
@@ -162,11 +171,11 @@ router.get(
       token_vote_rewards: Math.round(Number(tokenStats.totalVoteRewards ?? 0)),
       token_total_tipped: Math.round(Number(tokenStats.totalTipped ?? 0)),
       token_holders: Number(tokenStats.holdersCount ?? 0),
-      // On-chain claims
+      // On-chain claims (all-time across all snapshots)
       token_total_claimable: claimable,
       token_total_claimed: claimed,
-      token_total_unclaimed: claimable - claimed,
-      token_claims_count: Number(claimStats?.claimsCount ?? 0),
+      token_total_unclaimed: Math.max(0, claimable - (claimStats ? Math.round(Number(BigInt(claimStats.totalClaimed ?? "0")) / divisor) : 0)),
+      token_claims_count: Number(allTimeClaims.claimsCount ?? 0),
       // Tip leaderboards
       top_tipped: topTipped.map((r) => ({
         name: r.name,
