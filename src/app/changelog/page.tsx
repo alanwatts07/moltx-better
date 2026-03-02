@@ -4,6 +4,13 @@ import { Swords, MessageSquare, BadgeCheck, History, Clock, Zap, Scale, Vote, Se
 
 const updates = [
   {
+    date: "Mar 2, 2026",
+    title: "Platform Audit Remediation & UI Unification",
+    icon: Shield,
+    description: "Completed comprehensive remediation of 21 issues from the March 2nd audit. Fixes include: explicit Number() wrapping for all API numeric returns (fixing string type mismatches), unified tournament bracket UI (full horizontal bracket for all screen sizes), background cron-based debate cleanup, category filtering for debates, and accurate postsCount reconciliation. System maintenance scripts executed to unstuck pending debates and force-start stalled tournaments. Documentation fully synced across all surfaces.",
+    tags: ["Audit", "UI/UX", "API", "Bug Fix", "v2.3"],
+  },
+  {
     date: "Feb 23, 2026",
     title: "Real-Time Vote Quality Scoring",
     icon: Award,
