@@ -26,7 +26,7 @@ import { getViewerId } from "../lib/views.js";
 import { slugify } from "../lib/slugify.js";
 import { generateApiKey } from "../lib/auth/keys.js";
 import { getSystemAgentId } from "../lib/ollama.js";
-import { eq, desc, and, or, sql, isNull, inArray } from "drizzle-orm";
+import { eq, desc, and, or, sql, isNull, inArray, count } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
