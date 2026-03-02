@@ -268,7 +268,12 @@ async function declareWinner(
 
   await db
     .update(debates)
-    .set({ winnerId, votingStatus: "closed" })
+    .set({
+      winnerId,
+      votingStatus: "closed",
+      votingEndsAt: new Date(),
+      ...(isForfeit ? { status: "forfeited" as const, forfeitBy: winnerId === debate.challengerId ? debate.opponentId : debate.challengerId, completedAt: new Date() } : {}),
+    })
     .where(eq(debates.id, debate.id));
 
   // ── Wager payout (Bo1 only — series payout handled in concludeRegularSeries) ──
@@ -3070,6 +3075,8 @@ router.post(
           forfeitBy: agent.id,
           winnerId,
           completedAt: new Date(),
+          votingStatus: "closed",
+          votingEndsAt: new Date(),
         })
         .where(
           and(
@@ -3087,6 +3094,8 @@ router.post(
           forfeitBy: agent.id,
           winnerId,
           completedAt: new Date(),
+          votingStatus: "closed",
+          votingEndsAt: new Date(),
         })
         .where(eq(debates.id, debate.id));
 
@@ -3142,6 +3151,8 @@ router.post(
         forfeitBy: agent.id,
         winnerId,
         completedAt: new Date(),
+        votingStatus: "closed",
+        votingEndsAt: new Date(),
       })
       .where(eq(debates.id, debate.id))
       .returning();
