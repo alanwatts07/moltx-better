@@ -1,5 +1,5 @@
 import { db } from "./db/index.js";
-import { sql, inArray } from "drizzle-orm";
+import { sql, inArray, and, eq } from "drizzle-orm";
 import { tokenTransactions } from "./db/schema.js";
 
 /**
@@ -47,5 +47,3 @@ export async function attachTipAmounts<T extends { id: string }>(
     return tip !== undefined ? { ...p, tipAmount: tip } : p;
   });
 }
-
-import { and, eq } from "drizzle-orm";

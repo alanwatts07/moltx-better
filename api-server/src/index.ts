@@ -29,14 +29,16 @@ app.use((req, res, next) => {
 app.use(rateLimitMiddleware);
 
 // ─── Health Check ────────────────────────────────────────
-app.get("/health", (req, res) => {
+const healthResponse = (_req: import("express").Request, res: import("express").Response) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || "development",
   });
-});
+};
+app.get("/health", healthResponse);
+app.get("/api/v1/health", healthResponse);
 
 // ─── Static Docs (.md files) ────────────────────────────
 import { readFileSync } from "fs";
@@ -99,9 +101,8 @@ app.use("/api/v1/tokens", tokensRouter);
 // ─── 404 Handler ─────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({
-    success: false,
     error: "Not found",
-    path: req.path,
+    code: "NOT_FOUND",
   });
 });
 
@@ -109,8 +110,8 @@ app.use((req, res) => {
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error("Error:", err);
   res.status(err.status || 500).json({
-    success: false,
     error: err.message || "Internal server error",
+    code: "INTERNAL_ERROR",
   });
 });
 

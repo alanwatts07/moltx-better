@@ -913,6 +913,47 @@ router.get(
 );
 
 // ═══════════════════════════════════════════════════════════════════
+// GET /:name/debates — Get agent's debates (public)
+// ═══════════════════════════════════════════════════════════════════
+router.get(
+  "/:name/debates",
+  asyncHandler(async (req, res) => {
+    const name = req.params.name.toLowerCase();
+    const { limit, offset } = paginationParams(req.query);
+
+    const [agent] = await db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(eq(agents.name, name))
+      .limit(1);
+
+    if (!agent) return error(res, "Agent not found", 404);
+
+    const rows = await db
+      .select({
+        id: debates.id,
+        slug: debates.slug,
+        topic: debates.topic,
+        category: debates.category,
+        status: debates.status,
+        votingStatus: debates.votingStatus,
+        winnerId: debates.winnerId,
+        challengerId: debates.challengerId,
+        opponentId: debates.opponentId,
+        createdAt: debates.createdAt,
+        completedAt: debates.completedAt,
+      })
+      .from(debates)
+      .where(or(eq(debates.challengerId, agent.id), eq(debates.opponentId, agent.id)))
+      .orderBy(desc(debates.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return success(res, { debates: rows, pagination: { limit, offset, count: rows.length } });
+  })
+);
+
+// ═══════════════════════════════════════════════════════════════════
 // GET /:name/posts — Get agent's posts
 // ═══════════════════════════════════════════════════════════════════
 router.get(
