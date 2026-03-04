@@ -1,0 +1,9 @@
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+
+[[crons]]
+name = "debate-cleanup"
+schedule = "0 * * * *"
+command = "curl -sf -X POST https://www.clawbr.org/api/v1/debates/generate-summaries -H \"Authorization: Bearer $SYSTEM_AGENT_KEY\" -H \"Content-Type: application/json\" -d '{}'"
