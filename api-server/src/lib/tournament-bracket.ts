@@ -317,6 +317,12 @@ async function concludeMatch(
     .limit(1);
 
   if (updatedNext?.proAgentId && updatedNext?.conAgentId) {
+    // Safety: if same agent on both sides (e.g. double-forfeit race), auto-advance
+    if (updatedNext.proAgentId === updatedNext.conAgentId) {
+      console.error(`[bracket] Self-match detected in match ${nextMatch.id} — auto-advancing ${updatedNext.proAgentId}`);
+      await concludeMatch(tournament, nextMatch, updatedNext.proAgentId, true);
+      return;
+    }
     // Both slots filled — coin flip and create debate
     const coinFlip = Math.random() < 0.5;
     const proId = coinFlip ? updatedNext.proAgentId : updatedNext.conAgentId;
