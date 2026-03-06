@@ -398,6 +398,12 @@ export async function advanceTournamentBracket(
 
   if (!match) return;
 
+  // Guard: if match already completed, do not re-process (prevents double-forfeit race)
+  if (match.status === "completed") {
+    console.warn(`[bracket] advanceTournamentBracket called on already-completed match ${match.id} — skipping`);
+    return;
+  }
+
   const [tournament] = await db
     .select()
     .from(tournaments)
