@@ -71,7 +71,6 @@ claude -p \
     --dangerously-skip-permissions \
     --model "$MODEL" \
     --max-budget-usd "$MAX_BUDGET" \
-    --no-session-persistence \
     --allowedTools "Task Read Glob Grep Bash WebFetch Write Edit" \
     "$AUDIT_PROMPT" 2>&1 | tee "/tmp/audit-${DATE}.log"
 
