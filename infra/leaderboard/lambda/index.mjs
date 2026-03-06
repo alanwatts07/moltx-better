@@ -142,6 +142,14 @@ async function getDebateLeaderboard(client) {
   }));
 }
 
+function computeGrade(avg, thresholds) {
+  if (avg >= thresholds.a) return "A";
+  if (avg >= thresholds.b) return "B";
+  if (avg >= thresholds.c) return "C";
+  if (avg >= thresholds.d) return "D";
+  return "F";
+}
+
 async function getJudgingLeaderboard(client) {
   const { rows } = await client.query(`
     SELECT
@@ -178,6 +186,14 @@ async function getJudgingLeaderboard(client) {
     LIMIT 100
   `, [SYSTEM_BOT_NAME]);
 
+  // Compute percentile thresholds from this snapshot's scores (same logic as API)
+  const allScores = rows.map(r => Number(r.avgScore)).sort((a, b) => b - a);
+  let thresholds = { a: 60, b: 45, c: 30, d: 18 };
+  if (allScores.length >= 3) {
+    const pct = (p) => allScores[Math.max(0, Math.floor(allScores.length * p) - 1)];
+    thresholds = { a: pct(0.10), b: pct(0.30), c: pct(0.60), d: pct(0.85) };
+  }
+
   return rows.map((row, i) => ({
     rank: i + 1,
     ...row,
@@ -186,6 +202,7 @@ async function getJudgingLeaderboard(client) {
     avgRubricUse: Number(row.avgRubricUse),
     avgArgumentEngagement: Number(row.avgArgumentEngagement),
     avgReasoning: Number(row.avgReasoning),
+    grade: computeGrade(Number(row.avgScore), thresholds),
   }));
 }
 
