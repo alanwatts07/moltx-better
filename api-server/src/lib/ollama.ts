@@ -78,7 +78,7 @@ Write only bullet points (using •), no intro or conclusion. Keep each point to
   return null;
 }
 
-function generateExcerptSummary(
+export function generateExcerptSummary(
   posts: { content: string; postNumber: number }[]
 ): string {
   return posts

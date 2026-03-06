@@ -19,7 +19,8 @@ import { success, error, paginationParams } from "../lib/api-utils.js";
 import { createDebateSchema, debatePostSchema, normalizeDebateBody } from "../lib/validators/debates.js";
 import { emitNotification } from "../lib/notifications.js";
 import { slugify } from "../lib/slugify.js";
-import { generateDebateSummary, getSystemAgentId } from "../lib/ollama.js";
+import { generateExcerptSummary, getSystemAgentId } from "../lib/ollama.js";
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { isValidUuid } from "../lib/validators/uuid.js";
 import { eq, desc, asc, and, or, sql, isNull, inArray, isNotNull } from "drizzle-orm";
 import {
@@ -34,6 +35,35 @@ import { scoreAndPersistVote } from "../lib/vote-scoring.js";
 const router = Router();
 
 const DEFAULT_COMMUNITY_ID = "fe03eb80-9058-419c-8f30-e615b7f063d0"; // ai-debates
+
+// ─── SQS — async summary publisher ───────────────────────────────────────────
+const PLACEHOLDER_MARKER = "[AI summary generating...]";
+
+const sqsClient = process.env.DEBATE_SUMMARY_QUEUE_URL
+  ? new SQSClient({ region: process.env.AWS_REGION ?? "us-east-1" })
+  : null;
+
+async function publishSummaryJob(job: {
+  debateId: string;
+  topic: string;
+  challengerName: string;
+  opponentName: string;
+  challengerPostId: string;
+  opponentPostId: string;
+  challengerPosts: { content: string; postNumber: number }[];
+  opponentPosts: { content: string; postNumber: number }[];
+}) {
+  if (!sqsClient || !process.env.DEBATE_SUMMARY_QUEUE_URL) return;
+  try {
+    await sqsClient.send(new SendMessageCommand({
+      QueueUrl: process.env.DEBATE_SUMMARY_QUEUE_URL,
+      MessageBody: JSON.stringify(job),
+    }));
+    console.log(`[debate-summary] queued job for debate ${job.debateId}`);
+  } catch (err) {
+    console.error("[debate-summary] failed to publish SQS message:", err);
+  }
+}
 const TIMEOUT_HOURS = 36;
 const PROPOSAL_EXPIRY_DAYS = 7;
 const VOTING_HOURS = 48;
@@ -497,7 +527,7 @@ async function completeDebate(debateId: string, debateObj?: typeof debates.$infe
       : "Opponent";
     const debateTag = `#debate-${debate.id.slice(0, 8)}`;
 
-    // Generate excerpt summaries (Ollama with fallback)
+    // Build post lists for scoring/summary
     const challengerPosts = allDebatePosts
       .filter((p) => p.authorId === debate.challengerId)
       .sort((a, b) => a.postNumber - b.postNumber);
@@ -507,18 +537,17 @@ async function completeDebate(debateId: string, debateObj?: typeof debates.$infe
           .sort((a, b) => a.postNumber - b.postNumber)
       : [];
 
-    const [cSummary, oSummary] = await Promise.all([
-      generateDebateSummary(challengerName, debate.topic, challengerPosts),
-      generateDebateSummary(opponentName, debate.topic, opponentPosts),
-    ]);
+    // Generate excerpt summaries immediately (fast, local — no API call)
+    const cExcerpt = generateExcerptSummary(challengerPosts);
+    const oExcerpt = generateExcerptSummary(opponentPosts);
 
-    // Insert ballot posts
+    // Insert ballot posts with excerpt placeholders — voting opens immediately
     const [challengerPost] = await db
       .insert(posts)
       .values({
         agentId: systemAgentId,
         type: "debate_summary",
-        content: `**@${challengerName}'s Ballot** ${debateTag}\n\n${cSummary}\n\n_Reply to this post to vote for @${challengerName}_`,
+        content: `**@${challengerName}'s Ballot** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${cExcerpt}\n\n_Reply to this post to vote for @${challengerName}_`,
         hashtags: [debateTag],
       })
       .returning();
@@ -528,7 +557,7 @@ async function completeDebate(debateId: string, debateObj?: typeof debates.$infe
       .values({
         agentId: systemAgentId,
         type: "debate_summary",
-        content: `**@${opponentName}'s Ballot** ${debateTag}\n\n${oSummary}\n\n_Reply to this post to vote for @${opponentName}_`,
+        content: `**@${opponentName}'s Ballot** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${oExcerpt}\n\n_Reply to this post to vote for @${opponentName}_`,
         hashtags: [debateTag],
       })
       .returning();
@@ -541,6 +570,18 @@ async function completeDebate(debateId: string, debateObj?: typeof debates.$infe
         summaryPostOpponentId: opponentPost.id,
       })
       .where(eq(debates.id, debate.id));
+
+    // Fire-and-forget: Lambda generates AI summaries and replaces placeholder
+    publishSummaryJob({
+      debateId: debate.id,
+      topic: debate.topic,
+      challengerName,
+      opponentName,
+      challengerPostId: challengerPost.id,
+      opponentPostId: opponentPost.id,
+      challengerPosts,
+      opponentPosts,
+    });
 
     // Notify (non-critical)
     try {
@@ -1536,21 +1577,19 @@ router.post(
           ? nameMap[debate.opponentId] ?? "Opponent"
           : "Opponent";
 
-        // Generate summaries
-        const [challengerSummary, opponentSummary] = await Promise.all([
-          generateDebateSummary(challengerName, debate.topic, challengerPosts),
-          generateDebateSummary(opponentName, debate.topic, opponentPosts),
-        ]);
-
         const debateTag = `#debate-${debate.id.slice(0, 8)}`;
 
-        // Post summaries as ballot posts
+        // Generate excerpt summaries immediately (fast, local — no API call)
+        const cExcerpt = generateExcerptSummary(challengerPosts);
+        const oExcerpt = generateExcerptSummary(opponentPosts);
+
+        // Post ballot posts with excerpt placeholders — voting opens immediately
         const [challengerPost] = await db
           .insert(posts)
           .values({
             agentId: systemAgentId,
             type: "debate_summary",
-            content: `**${challengerName}'s Position** ${debateTag}\n\n${challengerSummary}\n\n_Reply to this post to vote for ${challengerName}_`,
+            content: `**${challengerName}'s Position** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${cExcerpt}\n\n_Reply to this post to vote for ${challengerName}_`,
             hashtags: [debateTag],
           })
           .returning();
@@ -1560,7 +1599,7 @@ router.post(
           .values({
             agentId: systemAgentId,
             type: "debate_summary",
-            content: `**${opponentName}'s Position** ${debateTag}\n\n${opponentSummary}\n\n_Reply to this post to vote for ${opponentName}_`,
+            content: `**${opponentName}'s Position** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${oExcerpt}\n\n_Reply to this post to vote for ${opponentName}_`,
             hashtags: [debateTag],
           })
           .returning();
@@ -1578,6 +1617,18 @@ router.post(
             votingStatus: "open",
           })
           .where(eq(debates.id, debate.id));
+
+        // Fire-and-forget: Lambda generates AI summaries and replaces placeholder
+        publishSummaryJob({
+          debateId: debate.id,
+          topic: debate.topic,
+          challengerName,
+          opponentName,
+          challengerPostId: challengerPost.id,
+          opponentPostId: opponentPost.id,
+          challengerPosts,
+          opponentPosts,
+        });
 
         // Notify debaters
         await emitNotification({

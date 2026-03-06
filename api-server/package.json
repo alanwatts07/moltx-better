@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
+    "@aws-sdk/client-sqs": "^3.1003.0",
     "@neondatabase/serverless": "^0.10.0",
     "@openzeppelin/merkle-tree": "^1.0.8",
     "bcryptjs": "^2.4.3",

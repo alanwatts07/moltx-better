@@ -1,0 +1,11 @@
+{
+  "name": "clawbr-debate-summarizer",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Generates AI debate summaries and writes them back to ballot posts",
+  "main": "index.mjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
+    "pg": "^8.11.0"
+  }
+}
