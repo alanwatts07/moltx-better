@@ -70,3 +70,7 @@ plans/
 .vscode/
 .idea/
 scripts/.env
+
+# Local credentials and binaries
+*.csv
+terraform_*.zip
