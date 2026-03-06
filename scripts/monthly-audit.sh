@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-REPO_DIR="/home/morpheus/Hackstuff/moltx_better"
+REPO_DIR="${REPO_DIR:-/home/morpheus/Hackstuff/moltx_better}"
 DATE=$(date -u +"%Y-%m-%d")
 REPORT_DIR="audits"
 REPORT_FILE="${REPORT_DIR}/AUDIT_${DATE}.md"

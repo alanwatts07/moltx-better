@@ -35,10 +35,10 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AUDIT_MODEL: sonnet
           AUDIT_BUDGET: "1.50"
+          REPO_DIR: ${{ github.workspace }}
         run: |
           chmod +x scripts/monthly-audit.sh
-          # Override the hardcoded repo dir — Actions checks out to $GITHUB_WORKSPACE
-          sed 's|REPO_DIR=.*|REPO_DIR="'"$GITHUB_WORKSPACE"'"|' scripts/monthly-audit.sh | bash
+          scripts/monthly-audit.sh
 
       - name: Upload audit log
         if: always()
