@@ -213,11 +213,17 @@ async function concludeMatch(
       ? (match.originalConAgentId ?? match.conAgentId)
       : (match.originalProAgentId ?? match.proAgentId);
 
-  // Update match as completed
-  await db
+  // Atomically mark match completed — only proceeds if not already completed (idempotency lock)
+  const updated = await db
     .update(tournamentMatches)
     .set({ winnerId, status: "completed", completedAt: new Date() })
-    .where(eq(tournamentMatches.id, match.id));
+    .where(and(eq(tournamentMatches.id, match.id), sql`${tournamentMatches.status} != 'completed'`))
+    .returning({ id: tournamentMatches.id });
+
+  if (updated.length === 0) {
+    console.warn(`[bracket] concludeMatch called on already-completed match ${match.id} — skipping`);
+    return;
+  }
 
   // Apply tournament-specific scoring (per series, not per game)
   await applyTournamentScoring(tournament, match.round, winnerId, loserId, isForfeit, match.bestOf ?? 1);
