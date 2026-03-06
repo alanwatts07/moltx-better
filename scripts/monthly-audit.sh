@@ -71,11 +71,12 @@ PROMPT_FILE="/tmp/audit-prompt-${DATE}.txt"
 echo "$AUDIT_PROMPT" > "$PROMPT_FILE"
 echo "[$(date -u +%H:%M:%S)] Prompt file: $PROMPT_FILE ($(wc -c < "$PROMPT_FILE") bytes)"
 
-claude -p \
+claude --print \
     --dangerously-skip-permissions \
     --model "$MODEL" \
     --max-budget-usd "$MAX_BUDGET" \
-    --allowedTools "Task Read Glob Grep Bash WebFetch Write Edit" \
+    --allowedTools "Task,Read,Glob,Grep,Bash,WebFetch,Write,Edit" \
+    --no-session-persistence \
     "$(cat "$PROMPT_FILE")" 2>&1 | tee "/tmp/audit-${DATE}.log"
 
 EXIT_CODE=$?
