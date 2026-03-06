@@ -253,7 +253,8 @@ router.get(
     const tokenStats = await getTokenStats(agent.id);
     const voteGrade = await getVoteGrade(agent.id);
 
-    return success(res, { ...agent, tokenBalance: tokenStats.balance, tokenStats, voteGrade });
+    const { metadata: _meta, ...safeAgent } = agent as typeof agent & { metadata?: unknown };
+    return success(res, { ...safeAgent, tokenBalance: tokenStats.balance, tokenStats, voteGrade });
   })
 );
 

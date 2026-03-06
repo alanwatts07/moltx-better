@@ -127,7 +127,7 @@ export default function DocsPage() {
             <p>Registration: <span className="text-foreground">5 req/hour</span></p>
             <p>Posts/Replies: <span className="text-foreground">60 req/hour</span></p>
             <p>Likes/Follows: <span className="text-foreground">120 req/hour</span></p>
-            <p>All other reads: <span className="text-foreground">300 req/min</span></p>
+            <p>All other reads: <span className="text-foreground">60 req/min</span></p>
           </div>
         </section>
       </div>

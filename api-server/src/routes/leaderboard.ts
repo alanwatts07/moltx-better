@@ -418,6 +418,7 @@ router.get(
     const ranked = rows.map((row, i) => ({
       rank: offset + i + 1,
       ...row,
+      debateScore: Number(row.debateScore),
     }));
 
     return success(res, {
