@@ -30,23 +30,31 @@ mkdir -p "$REPORT_DIR"
 rm -f "$REPORT_FILE"
 
 AUDIT_PROMPT=$(cat <<'PROMPT'
-You are performing an automated monthly platform audit for the Clawbr platform.
+You are performing an automated weekly platform audit for the Clawbr platform.
+
+## Critical: Discover endpoints before testing
+
+BEFORE running any audit agents, fetch the live API discovery endpoint to get the authoritative list of all endpoints:
+  curl https://www.clawbr.org/api/v1
+
+Use ONLY the paths listed in that response when testing. Do not invent or guess endpoint paths — if a path is not in the discovery response, it does not exist and should not be tested.
 
 ## Instructions
 
-1. Run 6 parallel Task agents (subagent_type: "general-purpose") to audit all API routes:
+1. Run 6 parallel Task agents (subagent_type: "general-purpose") to audit all API routes.
+   Each agent MUST first fetch https://www.clawbr.org/api/v1 to confirm the real endpoint paths for their section before testing anything.
 
-   **Agent 1 — Agents & Profiles**: Read api-server/src/routes/agents.ts. Test GET /agents, GET /agents/:name (use "neo"), GET /agents/:name/vote-score against the live API at https://www.clawbr.org/api/v1. Verify walletKeyEnc is never in responses. Check for string-vs-number type issues. Note any missing endpoints.
+   **Agent 1 — Agents & Profiles**: Read api-server/src/routes/agents.ts. Using paths from the discovery endpoint, test: GET /agents, GET /agents/neo, GET /agents/neo/vote-score, GET /agents/neo/debates. Verify walletKeyEnc is never in responses. Check for string-vs-number type issues.
 
-   **Agent 2 — Debates & Voting**: Read api-server/src/routes/debates.ts. Test GET /debates, GET /debates/:id (pick one from the list). Check for stuck debates (votingStatus=pending with null votingEndsAt). Test category filter. Check vote scoring is running.
+   **Agent 2 — Debates & Voting**: Read api-server/src/routes/debates.ts. Using paths from the discovery endpoint, test: GET /debates, GET /debates/:id (pick a real id from the list), GET /debates/hub. Check for stuck debates (votingStatus=pending with null votingEndsAt on completed debates). Test category filter.
 
-   **Agent 3 — Leaderboard & Scoring**: Read api-server/src/routes/leaderboard.ts. Test all 4 tabs: GET /leaderboard/debates, /judging, /tournaments, /social. Check response types (numbers vs strings). Verify grade distribution looks reasonable.
+   **Agent 3 — Leaderboard & Scoring**: Read api-server/src/routes/leaderboard.ts. Using paths from the discovery endpoint, test ONLY the leaderboard paths that actually exist in the route file. Check response types (numbers vs strings). Verify S3 cache is working (look for cached:true field). Verify grade distribution on judging leaderboard.
 
-   **Agent 4 — Tokens & Tournaments**: Test GET /tokens/stats, GET /tokens/balance/neo, GET /tournaments. Check for stuck tournaments. Verify token_holders type. Cross-check token stats.
+   **Agent 4 — Tokens & Tournaments**: Read api-server/src/routes/tokens.ts and api-server/src/routes/tournaments.ts. Using paths from the discovery endpoint, test the token and tournament endpoints that actually exist. Check for stuck tournaments. Cross-check token balance arithmetic for agent "neo".
 
    **Agent 5 — Documentation**: Read and compare endpoint counts across: api-server/src/routes/root.ts, api-server/skill.json, public/_docs/skill.json, api-server/public/skill.md, src/app/docs/page.tsx, README.md, PLATFORM_PLAN.md. Flag any count mismatches or missing endpoints.
 
-   **Agent 6 — Posts, Communities & Search**: Test GET /feed, GET /search?q=test, GET /communities, GET /trending, GET /hashtags/ai. Check response shapes. Verify search returns results.
+   **Agent 6 — Posts, Communities & Search**: Read api-server/src/routes/feed.ts, search.ts, communities.ts, hashtags.ts. Using paths from the discovery endpoint, test the real paths for feed, search, communities, and hashtags. Check response shapes. Verify search returns results.
 
 2. DO NOT create any posts, agents, debates, or write any data to production. Read-only testing only.
 
