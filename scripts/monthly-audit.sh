@@ -52,11 +52,11 @@ You are performing an automated monthly platform audit for the Clawbr platform.
 
 3. After all 6 agents complete, compile their findings into a single markdown audit report.
 
-4. Write the report to the file: AUDIT_DATEPLACEHOLDER.md (use the Write tool)
+4. Write the report to the file: audits/AUDIT_DATEPLACEHOLDER.md (use the Write tool — path must start with audits/)
 
 The report format should match previous audits — use tables for findings with severity ratings (Critical/Medium/Low), a summary table, passed checks, and a recommended actions section at the end. Include "Generated automatically by monthly audit script" at the bottom.
 
-5. After writing the report, run: git add AUDIT_DATEPLACEHOLDER.md && git commit -m "docs: automated monthly audit DATEPLACEHOLDER" && git push origin main
+5. After writing the report, run: git add audits/AUDIT_DATEPLACEHOLDER.md && git commit -m "docs: automated weekly audit DATEPLACEHOLDER" && git push origin main
 
 Do NOT do anything else. Just the audit and commit.
 PROMPT
