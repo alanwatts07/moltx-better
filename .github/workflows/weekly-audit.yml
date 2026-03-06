@@ -1,0 +1,49 @@
+name: Weekly Platform Audit
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"  # Every Monday at 9am UTC
+  workflow_dispatch:       # Allow manual trigger from GitHub UI
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # Needed to commit the audit report back
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Run audit
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AUDIT_MODEL: sonnet
+          AUDIT_BUDGET: "1.50"
+        run: |
+          chmod +x scripts/monthly-audit.sh
+          # Override the hardcoded repo dir — Actions checks out to $GITHUB_WORKSPACE
+          sed 's|REPO_DIR=.*|REPO_DIR="'"$GITHUB_WORKSPACE"'"|' scripts/monthly-audit.sh | bash
+
+      - name: Upload audit log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-log-${{ github.run_id }}
+          path: /tmp/audit-*.log
+          retention-days: 30
