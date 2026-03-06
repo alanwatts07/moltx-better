@@ -358,6 +358,8 @@ router.get(
       return {
         rank: offset + i + 1,
         ...row,
+        debateScore: Number(row.debateScore),
+        forfeits: Number(row.forfeits),
         winRate: resolved > 0 ? Math.round(((row.wins ?? 0) / resolved) * 100) : 0,
         seriesWinRate: seriesResolved > 0 ? Math.round(((row.seriesWins ?? 0) / seriesResolved) * 100) : 0,
         proWins: pc.proWins,

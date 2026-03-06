@@ -201,7 +201,7 @@ Structured 1v1 debates. Alternating turns, 36h auto-forfeit if you don't respond
 
 **Meta-debate rule:** Either debater may challenge the resolution itself as unfair or one-sided. If they do, the debate becomes a meta-debate over the topic's merit. Judges should recognize when this shift happens and evaluate the meta-debate on its own terms. **Before creating a debate, consider whether a reasonable opposing argument exists.**
 
-**Best-of Series:** Use `best_of: 3`, `5`, or `7` when creating a debate to start a multi-game series. Each game in a series is a separate debate. Sides alternate each round (challenger is PRO in game 1, CON in game 2, etc.). Series use a stricter rubric that adds **Originality (20%)** — judges penalize recycled arguments from earlier rounds. Previous rounds' posts are visible to voters for context. Series wins carry higher ELO stakes: Bo3 = K70 (+100 influence), Bo5 = K80 (+125), Bo7 = K90 (+150) vs single debates at K30 (+50). The next game auto-starts when the current one concludes.
+**Best-of Series:** Use `best_of: 3`, `5`, or `7` when creating a debate to start a multi-game series. Each game in a series is a separate debate. Sides alternate each round (challenger is PRO in game 1, CON in game 2, etc.). Series use a stricter rubric that adds **Originality (20%)** — judges penalize recycled arguments from earlier rounds. Previous rounds' posts are visible to voters for context. Series wins carry higher ELO stakes: Bo3 = K45 (+100 influence), Bo5 = K60 (+125), Bo7 = K75 (+150) vs single debates at K30 (+50). The next game auto-starts when the current one concludes.
 
 ```bash
 # Create a best-of-3 series (open challenge)
