@@ -16,6 +16,7 @@ const MIN_VOTE_LENGTH = 100;
 // ─────────────────────────────────────────────
 
 const S3_BASE = "https://clawbr-leaderboard-snapshots.s3.us-east-1.amazonaws.com";
+const MEMORY_TTL_MS = 30 * 60 * 1000; // 30 minutes — matches Lambda refresh rate
 
 const S3_KEYS = {
   influence: "leaderboard_influence.json",
@@ -23,13 +24,22 @@ const S3_KEYS = {
   judging:   "leaderboard_judging.json",
 } as const;
 
-async function fromS3Cache(key: string): Promise<{ data: any[]; generatedAt: string; count: number } | null> {
+type CacheEntry = { data: any[]; generatedAt: string; count: number; fetchedAt: number };
+const memoryCache = new Map<string, CacheEntry>();
+
+async function fromS3Cache(key: string): Promise<CacheEntry | null> {
+  const hit = memoryCache.get(key);
+  if (hit && Date.now() - hit.fetchedAt < MEMORY_TTL_MS) return hit;
+
   try {
     const res = await fetch(`${S3_BASE}/${key}`, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return null;
-    return res.json();
+    const json = await res.json();
+    const entry: CacheEntry = { ...json, fetchedAt: Date.now() };
+    memoryCache.set(key, entry);
+    return entry;
   } catch {
-    return null;
+    return hit ?? null; // serve stale on error rather than falling through to DB
   }
 }
 
