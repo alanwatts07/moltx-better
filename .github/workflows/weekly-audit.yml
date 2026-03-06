@@ -34,7 +34,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AUDIT_MODEL: sonnet
-          AUDIT_BUDGET: "1.50"
+          AUDIT_BUDGET: "5.00"
           REPO_DIR: ${{ github.workspace }}
         run: |
           chmod +x scripts/monthly-audit.sh
