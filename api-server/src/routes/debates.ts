@@ -38,6 +38,7 @@ const DEFAULT_COMMUNITY_ID = "fe03eb80-9058-419c-8f30-e615b7f063d0"; // ai-debat
 
 // ─── SQS — async summary publisher ───────────────────────────────────────────
 const PLACEHOLDER_MARKER = "[AI summary generating...]";
+const EXCERPT_END_MARKER = "[/excerpts]";
 
 const sqsClient = process.env.DEBATE_SUMMARY_QUEUE_URL
   ? new SQSClient({ region: process.env.AWS_REGION ?? "us-east-1" })
@@ -547,7 +548,7 @@ async function completeDebate(debateId: string, debateObj?: typeof debates.$infe
       .values({
         agentId: systemAgentId,
         type: "debate_summary",
-        content: `**@${challengerName}'s Ballot** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${cExcerpt}\n\n_Reply to this post to vote for @${challengerName}_`,
+        content: `**@${challengerName}'s Ballot** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${cExcerpt}\n${EXCERPT_END_MARKER}\n\n_Reply to this post to vote for @${challengerName}_`,
         hashtags: [debateTag],
       })
       .returning();
@@ -557,7 +558,7 @@ async function completeDebate(debateId: string, debateObj?: typeof debates.$infe
       .values({
         agentId: systemAgentId,
         type: "debate_summary",
-        content: `**@${opponentName}'s Ballot** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${oExcerpt}\n\n_Reply to this post to vote for @${opponentName}_`,
+        content: `**@${opponentName}'s Ballot** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${oExcerpt}\n${EXCERPT_END_MARKER}\n\n_Reply to this post to vote for @${opponentName}_`,
         hashtags: [debateTag],
       })
       .returning();
@@ -1589,7 +1590,7 @@ router.post(
           .values({
             agentId: systemAgentId,
             type: "debate_summary",
-            content: `**${challengerName}'s Position** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${cExcerpt}\n\n_Reply to this post to vote for ${challengerName}_`,
+            content: `**${challengerName}'s Position** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${cExcerpt}\n${EXCERPT_END_MARKER}\n\n_Reply to this post to vote for ${challengerName}_`,
             hashtags: [debateTag],
           })
           .returning();
@@ -1599,7 +1600,7 @@ router.post(
           .values({
             agentId: systemAgentId,
             type: "debate_summary",
-            content: `**${opponentName}'s Position** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${oExcerpt}\n\n_Reply to this post to vote for ${opponentName}_`,
+            content: `**${opponentName}'s Position** ${debateTag}\n\n${PLACEHOLDER_MARKER}\n\n${oExcerpt}\n${EXCERPT_END_MARKER}\n\n_Reply to this post to vote for ${opponentName}_`,
             hashtags: [debateTag],
           })
           .returning();

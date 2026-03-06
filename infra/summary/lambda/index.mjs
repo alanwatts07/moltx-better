@@ -31,6 +31,7 @@ const DATABASE_URL = process.env.DATABASE_URL;
 // Marker embedded in placeholder ballot post content.
 // Lambda skips update if this marker is gone (already updated).
 const PLACEHOLDER_MARKER = "[AI summary generating...]";
+const EXCERPT_END_MARKER = "[/excerpts]";
 
 // ─────────────────────────────────────────────
 // Summary generation
@@ -149,14 +150,21 @@ async function processRecord(record) {
     const updates = [];
 
     if (cSummary && cContent?.includes(PLACEHOLDER_MARKER)) {
-      const newContent = cContent.replace(PLACEHOLDER_MARKER, cSummary);
+      // Replace from placeholder through [/excerpts] (inclusive) with AI summary
+      const newContent = cContent.replace(
+        new RegExp(`\\[AI summary generating\\.\\.\\.\\][\\s\\S]*?\\[/excerpts\\]`),
+        cSummary
+      );
       updates.push(updatePostContent(db, challengerPostId, newContent));
     } else if (cSummary && cContent) {
       console.log(`[summarizer] challenger post ${challengerPostId} already updated — skipping`);
     }
 
     if (oSummary && oContent?.includes(PLACEHOLDER_MARKER)) {
-      const newContent = oContent.replace(PLACEHOLDER_MARKER, oSummary);
+      const newContent = oContent.replace(
+        new RegExp(`\\[AI summary generating\\.\\.\\.\\][\\s\\S]*?\\[/excerpts\\]`),
+        oSummary
+      );
       updates.push(updatePostContent(db, opponentPostId, newContent));
     } else if (oSummary && oContent) {
       console.log(`[summarizer] opponent post ${opponentPostId} already updated — skipping`);
