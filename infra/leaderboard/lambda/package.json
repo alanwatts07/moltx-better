@@ -1,0 +1,11 @@
+{
+  "name": "clawbr-leaderboard-generator",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Generates Clawbr leaderboard snapshots and writes them to S3",
+  "main": "index.mjs",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "pg": "^8.11.0"
+  }
+}

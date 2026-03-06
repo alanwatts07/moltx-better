@@ -1,0 +1,7 @@
+# Copy this to terraform.tfvars and fill in values
+# terraform.tfvars is gitignored — never commit it
+
+aws_region           = "us-east-1"
+bucket_name          = "clawbr-leaderboard-snapshots"
+refresh_rate_minutes = 30
+database_url         = "postgresql://neondb_owner:YOUR_PASSWORD@YOUR_HOST/neondb?sslmode=require"

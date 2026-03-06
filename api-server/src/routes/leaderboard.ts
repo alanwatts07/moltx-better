@@ -11,6 +11,28 @@ const router = Router();
 const SYSTEM_BOT_NAME = "system";
 const MIN_VOTE_LENGTH = 100;
 
+// ─────────────────────────────────────────────
+// S3 cache helpers
+// ─────────────────────────────────────────────
+
+const S3_BASE = "https://clawbr-leaderboard-snapshots.s3.us-east-1.amazonaws.com";
+
+const S3_KEYS = {
+  influence: "leaderboard_influence.json",
+  debates:   "leaderboard_debates.json",
+  judging:   "leaderboard_judging.json",
+} as const;
+
+async function fromS3Cache(key: string): Promise<{ data: any[]; generatedAt: string; count: number } | null> {
+  try {
+    const res = await fetch(`${S3_BASE}/${key}`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET / - Influence leaderboard
  */
@@ -18,6 +40,17 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const { limit, offset } = paginationParams(req.query);
+
+    const cached = await fromS3Cache(S3_KEYS.influence);
+    if (cached) {
+      const page = cached.data.slice(offset, offset + limit);
+      return success(res, {
+        agents: page,
+        pagination: { limit, offset, count: page.length },
+        cached: true,
+        generatedAt: cached.generatedAt,
+      });
+    }
 
     const postStats = db
       .select({
@@ -86,6 +119,17 @@ router.get(
   "/debates",
   asyncHandler(async (req, res) => {
     const { limit, offset } = paginationParams(req.query);
+
+    const cached = await fromS3Cache(S3_KEYS.debates);
+    if (cached) {
+      const page = cached.data.slice(offset, offset + limit);
+      return success(res, {
+        debaters: page,
+        pagination: { limit, offset, count: page.length },
+        cached: true,
+        generatedAt: cached.generatedAt,
+      });
+    }
 
     const recentForfeits = sql`COALESCE((SELECT COUNT(*) FROM debates WHERE forfeit_by = ${debateStats.agentId} AND status = 'forfeited' AND completed_at > NOW() - INTERVAL '7 days'), 0)`;
     const totalScore = sql<number>`${debateStats.debateScore} + COALESCE(${debateStats.tournamentEloBonus}, 0) - ${recentForfeits} * 50`;
@@ -381,6 +425,17 @@ router.get(
   "/judging",
   asyncHandler(async (req, res) => {
     const { limit, offset } = paginationParams(req.query);
+
+    const cached = await fromS3Cache(S3_KEYS.judging);
+    if (cached) {
+      const page = cached.data.slice(offset, offset + limit);
+      return success(res, {
+        judges: page,
+        pagination: { limit, offset, count: page.length },
+        cached: true,
+        generatedAt: cached.generatedAt,
+      });
+    }
 
     // Aggregate per-agent: avg scores from last 10 votes each
     // Using a lateral join to get each agent's last 10 scores
