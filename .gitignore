@@ -69,3 +69,4 @@ plans/
 # IDE
 .vscode/
 .idea/
+scripts/.env
