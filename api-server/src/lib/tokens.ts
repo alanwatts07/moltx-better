@@ -167,35 +167,48 @@ export async function getBalance(agentId: string): Promise<number> {
 
 /**
  * Get full token stats for an agent.
+ *
+ * balance        — from token_balances (authoritative, atomic after debits)
+ * all breakdowns — computed from token_transactions ledger (single source of truth,
+ *                  never drifts from the actual transaction history)
  */
 export async function getTokenStats(agentId: string) {
-  const [row] = await db
-    .select()
+  // balance is still the authoritative current balance (atomic debit/credit)
+  const [balRow] = await db
+    .select({ balance: tokenBalances.balance })
     .from(tokenBalances)
     .where(eq(tokenBalances.agentId, agentId))
     .limit(1);
 
-  if (!row) {
-    return {
-      balance: 0,
-      totalEarned: 0,
-      totalSpent: 0,
-      totalTipsReceived: 0,
-      totalTipsSent: 0,
-      totalDebateWinnings: 0,
-      totalTournamentWinnings: 0,
-      totalVoteRewards: 0,
-    };
+  // All breakdowns computed from the append-only ledger
+  const txRows = await db
+    .select({
+      reason: tokenTransactions.reason,
+      total: sql<string>`SUM(${tokenTransactions.amount}::numeric)`,
+    })
+    .from(tokenTransactions)
+    .where(eq(tokenTransactions.agentId, agentId))
+    .groupBy(tokenTransactions.reason);
+
+  const byReason: Record<string, number> = {};
+  for (const row of txRows) {
+    byReason[row.reason] = Number(row.total);
   }
 
+  const DEBATE_WIN_REASONS = ["debate_win", "series_win", "wager_payout"];
+  const TOURNAMENT_REASONS = ["tournament_match_win", "tournament_semifinalist", "tournament_runner_up", "tournament_champion"];
+  const DEBIT_REASONS = ["withdraw", "wager_escrow"];
+
+  const sum = (reasons: string[]) => reasons.reduce((acc, r) => acc + (byReason[r] ?? 0), 0);
+
   return {
-    balance: Number(row.balance),
-    totalEarned: Number(row.totalEarned),
-    totalSpent: Number(row.totalSpent),
-    totalTipsReceived: Number(row.totalTipsReceived),
-    totalTipsSent: Number(row.totalTipsSent),
-    totalDebateWinnings: Number(row.totalDebateWinnings),
-    totalTournamentWinnings: Number(row.totalTournamentWinnings),
-    totalVoteRewards: Number(row.totalVoteRewards),
+    balance: balRow ? Number(balRow.balance) : 0,
+    totalEarned: sum(Object.keys(byReason).filter(r => !DEBIT_REASONS.includes(r) && r !== "tip_sent")),
+    totalSpent: sum([...DEBIT_REASONS, "tip_sent"]),
+    totalTipsReceived: byReason["tip_received"] ?? 0,
+    totalTipsSent: byReason["tip_sent"] ?? 0,
+    totalDebateWinnings: sum(DEBATE_WIN_REASONS),
+    totalTournamentWinnings: sum(TOURNAMENT_REASONS),
+    totalVoteRewards: byReason["qualifying_vote"] ?? 0,
   };
 }
