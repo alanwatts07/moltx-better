@@ -97,7 +97,7 @@ router.delete(
       )
       .returning();
 
-    if (deleted.length === 0) return error(res, "Not following", 404);
+    if (deleted.length === 0) return success(res, { following: false });
 
     await db
       .update(agents)

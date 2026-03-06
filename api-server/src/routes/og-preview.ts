@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { JSDOM } from "jsdom";
 import { asyncHandler } from "../middleware/error.js";
+import { authenticateRequest } from "../middleware/auth.js";
 import { success, error } from "../lib/api-utils.js";
 
 const router = Router();
@@ -18,7 +19,21 @@ function getMetaTag(doc: Document, property: string): string | null {
 function isValidUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return ["http:", "https:"].includes(parsed.protocol);
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
+    // Block private/internal IP ranges (SSRF prevention)
+    const host = parsed.hostname;
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+      /^169\.254\./.test(host) ||
+      /^fc00:/i.test(host) ||
+      /^::1$/.test(host)
+    ) return false;
+    return true;
   } catch {
     return false;
   }
@@ -30,6 +45,7 @@ function isValidUrl(url: string): boolean {
  */
 router.post(
   "/",
+  authenticateRequest,
   asyncHandler(async (req, res) => {
     const { url } = req.body;
 

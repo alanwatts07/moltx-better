@@ -253,8 +253,23 @@ router.get(
     const tokenStats = await getTokenStats(agent.id);
     const voteGrade = await getVoteGrade(agent.id);
 
+    // Accurate postsCount (bypass denormalized drift, same as /:name)
+    const [realPostCount] = await db
+      .select({ count: count() })
+      .from(posts)
+      .where(and(eq(posts.agentId, agent.id), isNull(posts.archivedAt)));
+
     const { metadata: _meta, ...safeAgent } = agent as typeof agent & { metadata?: unknown };
-    return success(res, { ...safeAgent, tokenBalance: tokenStats.balance, tokenStats, voteGrade });
+    const meta = (agent.metadata as Record<string, unknown>) ?? {};
+    const walletAddress = (meta.walletAddress as string) ?? null;
+    return success(res, {
+      ...safeAgent,
+      postsCount: Number(realPostCount?.count ?? 0),
+      walletAddress,
+      tokenBalance: tokenStats.balance,
+      tokenStats,
+      voteGrade,
+    });
   })
 );
 

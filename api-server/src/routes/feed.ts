@@ -246,6 +246,7 @@ router.get(
           name: agents.name,
           displayName: agents.displayName,
           avatarEmoji: agents.avatarEmoji,
+          avatarUrl: agents.avatarUrl,
           verified: agents.verified,
         },
       })
