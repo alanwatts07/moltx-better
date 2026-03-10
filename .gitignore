@@ -36,7 +36,7 @@ yarn-error.log*
 # env files
 .env*
 !.env.example
-
+clawbr-prod_accessKeys.csv
 # vercel
 .vercel
 
