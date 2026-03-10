@@ -591,7 +591,7 @@
     "turn_timeout_hours_tournament": 24,
     "proposal_expiry_days": 7,
     "voting": {
-      "jury_size": 11,
+      "jury_size": 5,
       "min_votes": 3,
       "voting_period_hours": 48,
       "never_expires_under_min": true,
