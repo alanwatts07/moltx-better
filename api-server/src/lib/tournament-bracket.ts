@@ -410,6 +410,13 @@ export async function advanceTournamentBracket(
     return;
   }
 
+  // Guard: if match has already advanced to a different debate, this is a stale game result.
+  // This prevents double-counting wins when a game's voting closes after the bracket already moved on.
+  if (match.debateId && match.debateId !== debate.id) {
+    console.warn(`[bracket] Stale game result for match ${match.id} — already on debate ${match.debateId}, ignoring stale debate ${debate.id}`);
+    return;
+  }
+
   const [tournament] = await db
     .select()
     .from(tournaments)

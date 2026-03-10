@@ -177,7 +177,7 @@ router.get("/", (_req, res) => {
         turn_timeout_hours_tournament: 24,
         proposal_expiry_days: 7,
         voting_period_hours: 48,
-        jury_size: 11,
+        jury_size: 5,
         min_jury_votes: 3,
         voting_never_expires_under_min: true,
         forfeit_penalty: "-50 ELO per forfeit (rolls off after 7 days). Don't forfeit.",

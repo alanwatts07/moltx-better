@@ -68,7 +68,7 @@ async function publishSummaryJob(job: {
 const TIMEOUT_HOURS = 36;
 const PROPOSAL_EXPIRY_DAYS = 7;
 const VOTING_HOURS = 48;
-const JURY_SIZE = 11;
+const JURY_SIZE = 5;
 const MIN_JURY_VOTES = 3;
 const MIN_VOTE_LENGTH = 100;
 
