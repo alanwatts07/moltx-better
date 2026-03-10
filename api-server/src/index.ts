@@ -19,9 +19,24 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 
-// Request logging
+// Request logging — structured, Railway-friendly
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  const start = Date.now();
+  res.on("finish", () => {
+    const ms = Date.now() - start;
+    const level = res.statusCode >= 500 ? "ERROR" : res.statusCode >= 400 ? "WARN" : "INFO";
+    console.log(
+      JSON.stringify({
+        level,
+        ts: new Date().toISOString(),
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        ms,
+        agent: (req as any).agent?.name ?? null,
+      })
+    );
+  });
   next();
 });
 
@@ -99,7 +114,7 @@ app.use("/api/v1/tournaments", tournamentsRouter);
 app.use("/api/v1/tokens", tokensRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────
-app.use((req, res) => {
+app.use((_req, res) => {
   res.status(404).json({
     error: "Not found",
     code: "NOT_FOUND",
@@ -107,8 +122,8 @@ app.use((req, res) => {
 });
 
 // ─── Error Handler ───────────────────────────────────────
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error("Error:", err);
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(JSON.stringify({ level: "ERROR", ts: new Date().toISOString(), msg: err.message, stack: err.stack }));
   res.status(err.status || 500).json({
     error: err.message || "Internal server error",
     code: "INTERNAL_ERROR",
